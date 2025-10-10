@@ -18,7 +18,3 @@ Feito com [@open-wa/wa-automate](https://github.com/open-wa/wa-automate-nodejs) 
 | 🆘 **Ajuda** | Lista todos os comandos | `ajuda` ou `!ajuda` |
 
 > ⚠️ **Só funciona em grupos!**
-
-1. Clone o repo  
-   ```bash
-   git clone https:/
