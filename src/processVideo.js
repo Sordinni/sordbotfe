@@ -1,7 +1,16 @@
-/* ---------- processVideo.js ---------- */
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta } = require('./userMetaDb');
+const userMeta = getUserMeta(message.sender.id) || {
+  pack: 'figurinha por',
+  author: 'So𝘳dBOT'
+};
 
+const stickerMetadata = {
+  author: userMeta.author,
+  pack: userMeta.pack,
+  keepScale: true,
+  crop: false,
+};
 
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 
@@ -12,19 +21,6 @@ async function processVideo(client, message) {
   const key   = lockKey(message);
   const chatId = message.chatId;
   const msgId  = message.id;
-  const userId = message.sender.id;
-
-      // ⭐️ METADADOS DINÂMICOS ⭐️
-      const userMeta = getUserMeta(userId) || {
-        pack: 'figurinha por',
-        author: 'So𝘳dBOT'
-      };
-      const stickerMetadata = {
-        author: userMeta.author,
-        pack: userMeta.pack,
-        keepScale: true,
-        crop: false,
-      };
 
   /* 1.  já está processando? */
   if (processing.has(key)) {
@@ -44,7 +40,7 @@ async function processVideo(client, message) {
         const result = await client.sendMp4AsSticker(
           chatId,
           media,
-          { fps, startTime: '00:00:00.0', endTime: '00:00:010.0', loop: 0, square: 240 },
+          { fps,endTime: '00:00:10.0', loop: 0, square: 240 },
           stickerMetadata,
           msgId
         );
@@ -57,8 +53,7 @@ async function processVideo(client, message) {
       }
     }
 
-    /* nenhum FPS funcionou */
-    await client.reply(chatId, '❌ Não consegui gerar a figurinha em nenhuma taxa de FPS.', msgId);
+    await client.reply(chatId, '❌ Não consegui gerar a figurinha, ficou maior que 1MB.', msgId);
     await client.react(msgId, '🥲');
 
   } catch (err) {
@@ -66,7 +61,6 @@ async function processVideo(client, message) {
     await client.reply(chatId, '❌ Erro ao processar o vídeo.', msgId);
 
   } finally {
-    /* 4.  libera o lock independentemente de sucesso/erro */
     processing.delete(key);
   }
 }
