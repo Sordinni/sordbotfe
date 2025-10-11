@@ -1,7 +1,6 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { createCanvas, loadImage } = require('canvas');
-const { getUseStretch } = require('./userDb');
-const { getUserMeta } = require('./userMetaDb');
+const { getUseStretch, getUserMeta } = require('./userMeta');
 
 /* ---- stretch helper ---- */
 const stretchImage = async (base64Image) => {

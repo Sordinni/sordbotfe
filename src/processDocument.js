@@ -1,5 +1,5 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
-const { getUserMeta } = require('./userMetaDb');
+const { getUserMeta } = require('./userMeta');
 
 /**
  * Converte documento de imagem em figurinha

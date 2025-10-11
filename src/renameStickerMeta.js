@@ -1,6 +1,6 @@
 // src/renameStickerMeta.js
 const { decryptMedia } = require('@open-wa/wa-automate');
-const { getUserMeta, setUserMeta, resetUserMeta } = require('./userMetaDb');
+const { getUserMeta, setUserMeta, resetUserMeta } = require('./userMeta');
 
 const ALIASES = ['renomear', 'r', 'ren'];
 

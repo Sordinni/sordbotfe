@@ -11,6 +11,7 @@ const config = {
     sessionId: 'SordBOT_FE',
     multiDevice: true,
     authTimeout: 60,
+    sessionDataPath: './sessão',
     blockCrashLogs: true,
     disableSpins: true,
     headless: true,

@@ -1,4 +1,4 @@
-const { toggleStretch } = require('./userDb');
+const { toggleStretch } = require('./userMeta');
 
 /**
  * Handler para a palavra-chave "alternar"

@@ -1,64 +1,84 @@
+// src/processVideo.js
 const { decryptMedia } = require('@open-wa/wa-automate');
-const { createCanvas, loadImage } = require('canvas');
-const { getUseStretch } = require('./userDb');
-const { getUserMeta } = require('./userMetaDb');
+const { getUserMeta } = require('./userMeta');
 
-/* ---- stretch helper ---- */
-const stretchImage = async (base64Image) => {
-  const canvas = createCanvas();
-  const img = await loadImage(base64Image);
-  const maxSize = Math.max(img.width, img.height);
-  canvas.width = maxSize;
-  canvas.height = maxSize;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, maxSize, maxSize);
-  return canvas.toBuffer('image/jpeg');
-};
+const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 
-/* ---- handler ---- */
-async function processImage(client, message) {
+/* ---------- Mapa de bloqueio por usuário ---------- */
+const processing = new Map(); // key => "chatId_senderId"
+
+function lockKey(message) {
+  return `${message.chatId}_${message.sender.id}`;
+}
+
+async function processVideo(client, message) {
+  const key = lockKey(message);
+  const chatId = message.chatId;
+  const messageId = message.id;
+  const userId = message.sender.id;
+
+  await client.react(messageId, `🖐️`);
+
+  /* 1. já está processando? */
+  if (processing.has(key)) {
+    return;
+  }
+
+  /* 2. lock */
+  processing.set(key, true);
+  console.log(`🎥 Processando vídeo de ${userId}...`);
+
   try {
-    const chatId = message.chatId;
-    const messageId = message.id;
-    const userId = message.sender.id;
-    await client.react(messageId, '🖐️');
-    console.log('📷 Processando imagem...');
+    const mediaData = await decryptMedia(message);
 
-    // ⭐️ METADADOS DINÂMICOS ⭐️
-    const userMeta = getUserMeta(userId) || {
-      pack: 'figurinha por',
-      author: 'SordBOT'
-    };
+    /* ⭐️ METADADOS DINÂMICOS COM FALLBACK ⭐️ */
+    const userMeta = getUserMeta(userId) || {};
     const stickerMetadata = {
-      author: userMeta.author,
-      pack: userMeta.pack,
-      keepScale: true,
-      crop: false,
+      author: userMeta.author || 'So𝘳dBOT',
+      pack: userMeta.pack || 'figurinha por',
     };
 
-    let mediaData = await decryptMedia(message);
-    if (getUseStretch(userId)) {
-      mediaData = await stretchImage(mediaData);
-      console.log('🔀 Imagem stretch aplicada');
+    for (const fps of FPS_POOL) {
+      console.log(`🔧 ${key} -> tentando ${fps} FPS`);
+      const opts = {
+        fps,
+        startTime: '00:00:00.0',
+        endTime: '00:00:10.0',
+        loop: 0,
+        square: 240,
+      };
+
+      try {
+        const result = await client.sendMp4AsSticker(
+          chatId,
+          mediaData,
+          opts,
+          stickerMetadata,
+          messageId
+        );
+
+        if (result) {
+          await client.react(messageId, `🙂`);
+          return; // sucesso
+        }
+      } catch (e) {
+        console.warn(`❌ ${fps} FPS falhou para ${key}:`, e.message);
+      }
     }
 
-    const result = await client.sendImageAsStickerAsReply(
+    await client.reply(
       chatId,
-      mediaData,
-      messageId,
-      stickerMetadata
+      '❌ Não consegui gerar a figurinha em nenhuma taxa de FPS.',
+      messageId
     );
-
-    if (result) {
-      await client.deleteMessage(chatId, message.id);
-      console.log('✅ Figurinha de imagem enviada');
-    } else {
-      await client.sendText(chatId, '❌ Erro ao criar figurinha da imagem.', messageId);
-    }
-  } catch (error) {
-    console.error('Erro ao processar imagem:', error);
-    await client.sendText(message.chatId, '❌ Erro ao processar a imagem.', message.id);
+    await client.react(messageId, `🥲`);
+  } catch (err) {
+    console.error('Erro ao processar vídeo:', err);
+    await client.reply(chatId, '❌ Erro ao processar o vídeo.', messageId);
+  } finally {
+    /* 3. sempre libera o lock */
+    processing.delete(key);
   }
 }
 
-module.exports = { processImage };
+module.exports = { processVideo };
