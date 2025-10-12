@@ -1,10 +1,9 @@
-// src/processVideo.js
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta } = require('./userMeta');
 
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 
-/* ---------- Mapa de bloqueio por usuário ---------- */
+// Mapa de bloqueio para evitar processamento concorrente
 const processing = new Map(); // key => "chatId_senderId"
 
 function lockKey(message) {
