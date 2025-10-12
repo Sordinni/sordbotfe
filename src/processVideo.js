@@ -58,7 +58,8 @@ async function processVideo(client, message) {
         );
 
         if (result) {
-          await client.react(messageId, `🙂`);
+      await client.deleteMessage(chatId, message.id);
+      console.log('✅ Figurinha de vídeo enviada');
           return; // sucesso
         }
       } catch (e) {
