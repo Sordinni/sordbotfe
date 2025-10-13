@@ -45,7 +45,7 @@ async function start(client) {
     client.onMessage(async (message) => {
         try {
             if (!message.isGroupMsg) return;
-
+if (message.caption && message.caption.trim()) return;
             msgCount++;
             if (msgCount >= 200) await cleanCache();
 
