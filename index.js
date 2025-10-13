@@ -6,6 +6,7 @@ const { processDocument } = require('./src/processDocument');
 const { handleToggle } = require('./src/toggleStretch');
 const { handleSocialMediaDownload } = require('./src/social-downloader');
 const { handleRenameSticker } = require('./src/renameStickerMeta');
+const { handleEmoji } = require('./src/processEmoji');
 
 const config = {
     sessionId: 'SordBOT_FE',
@@ -82,7 +83,8 @@ if (message.caption && message.caption.trim()) return;
                 }
                 return; // fim do fluxo do comando fig
             }
-
+const emojiSent = await handleEmoji(client, message);
+if (emojiSent) return;
             switch (message.type) {
                 case 'image': await processImage(client, message); break;
                 case 'video': await processVideo(client, message); break;
