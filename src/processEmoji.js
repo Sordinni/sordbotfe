@@ -57,16 +57,13 @@ function buildUrls(id) {
 // Manipula mensagem de emoji
 async function handleEmoji(client, message) {
   const text = (message.body || '').trim();
-  console.log(`[EMOJI-GG/STICKERS-GG] Texto recebido: "${text}"`);
 
   const emojiId = extractId(text);
   if (!emojiId) return false;
 
   const userId = message.sender.id;
-  console.log(`[EMOJI-GG/STICKERS-GG] ID extraído: ${emojiId}`);
 
   const userMeta = getUserMeta(userId) || { pack: 'figurinha por', author: 'So𝘳dBOT' };
-  console.log(`[EMOJI-GG/STICKERS-GG] Metadados – pack: "${userMeta.pack}" | author: "${userMeta.author}"`);
 
   const safeName = `${emojiId}_${userMeta.pack}_${userMeta.author}`.replace(/[^a-z0-9_-]/gi, '_');
   const urls = buildUrls(emojiId);
@@ -78,18 +75,15 @@ async function handleEmoji(client, message) {
     const ext = path.extname(url);
     const fullPath = path.join(STICKERS_DIR, safeName + ext);
     try {
-      console.log(`[EMOJI-GG/STICKERS-GG] ⬇️  Tentando: ${url}`);
       await downloadFile(url, fullPath);
       localPath = fullPath;
       isGif = ext === '.gif';
       break;
     } catch (e) {
-      console.log(`[EMOJI-GG/STICKERS-GG] ⚠️  Falhou (${e.message}) – tentando próximo...`);
     }
   }
 
   if (!localPath) {
-    console.error(`[EMOJI-GG/STICKERS-GG] ❌ Nenhuma versão encontrada.`);
     await client.reply(message.chatId, '❌ Não consegui baixar esse emoji/sticker.', message.id);
     return true;
   }
@@ -106,7 +100,6 @@ async function handleEmoji(client, message) {
     let mp4Path = null;
 
     if (isGif) {
-      console.log(`[EMOJI-GG/STICKERS-GG] 🎥 Convertendo GIF → MP4...`);
       mp4Path = await gifToMp4(localPath);
       finalBuffer = fs.readFileSync(mp4Path);
     } else {
@@ -130,9 +123,7 @@ async function handleEmoji(client, message) {
       );
     }
 
-    console.log(`[EMOJI-GG/STICKERS-GG] ✅ Sticker enviado (${emojiId})`);
   } catch (err) {
-    console.error(`[EMOJI-GG/STICKERS-GG] ❌ Erro ao enviar sticker:`, err.message);
     await client.reply(message.chatId, '❌ Não consegui enviar esse emoji/sticker.', message.id);
   } finally {
     if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
