@@ -3,3 +3,4 @@ stickers_temp
 stickers_download
 /src/temp/
 /sessão/*
+/db/users.json
