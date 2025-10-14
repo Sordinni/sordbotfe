@@ -18,12 +18,12 @@ async function processVideo(client, message) {
 
   await client.react(messageId, `🖐️`);
 
-  /* 1. já está processando? */
+// 1. verifica se já está processando
   if (processing.has(key)) {
     return;
   }
 
-  /* 2. lock */
+// 2. coloca o lock
   processing.set(key, true);
   console.log(`🎥 Processando vídeo de ${userId}...`);
 
@@ -76,7 +76,7 @@ async function processVideo(client, message) {
     console.error('Erro ao processar vídeo:', err);
     await client.reply(chatId, '❌ Erro ao processar o vídeo.', messageId);
   } finally {
-    /* 3. sempre libera o lock */
+    // 3. sempre libera o lock
     processing.delete(key);
   }
 }

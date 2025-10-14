@@ -1,10 +1,5 @@
 const { toggleStretch } = require('./userMeta');
 
-/**
- * Handler para a palavra-chave "alternar"
- * @param {import('@open-wa/wa-automate').Client} client
- * @param {import('@open-wa/wa-automate').Message} message
- */
 async function handleToggle(client, message) {
   if (!message.isGroupMsg) return; // só em grupos
 

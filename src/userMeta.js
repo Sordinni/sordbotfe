@@ -1,10 +1,8 @@
-// src/userMeta.js
 const fs   = require('fs');
 const path = require('path');
 
 const DB_FILE = path.join(__dirname, '..', 'db', 'users.json');
 
-/* ---------- helpers ---------- */
 function ensureFolder() {
   const dir = path.dirname(DB_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -29,7 +27,6 @@ function save(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-/* ---------- stretch ---------- */
 function toggleStretch(userId) {
   const db = load();
   if (!db[userId]) db[userId] = {};
@@ -43,7 +40,6 @@ function getUseStretch(userId) {
   return db[userId]?.useStretch ?? true;   // padrão: true
 }
 
-/* ---------- sticker meta ---------- */
 function getUserMeta(userId) {
   const db = load();
   if (!db[userId] || (!db[userId].pack && !db[userId].author)) return null;

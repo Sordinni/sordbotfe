@@ -1,4 +1,3 @@
-// src/renameStickerMeta.js
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta, setUserMeta, resetUserMeta } = require('./userMeta');
 
@@ -15,7 +14,7 @@ async function handleRenameSticker(client, message) {
   const args = body.slice(cmd.length).trim();
   const userId = message.sender.id;
 
-  /* ---------- RESETAR ---------- */
+  // Comando para resetar metadados
   if (args === 'resetar') {
     resetUserMeta(userId);
     await client.reply(
@@ -26,7 +25,6 @@ async function handleRenameSticker(client, message) {
     return;
   }
 
-  /* ---------- RENOMEAR FIGURINHA RESPONDIDA ---------- */
   // Se respondeu uma figurinha
   if (message.quotedMsg && message.quotedMsg.type === 'sticker') {
     const match = args.match(/^["“](.+?)["”]\s+["“](.+?)["”]$/);
@@ -72,7 +70,7 @@ async function handleRenameSticker(client, message) {
     return;
   }
 
-  /* ---------- RENOMEAR PADRÃO (antigo) ---------- */
+  // Renomear padrão (antigo)
   const match = args.match(/^["“](.+?)["”]\s+["“](.+?)["”]$/);
   if (!match) {
     await client.reply(

@@ -8,10 +8,7 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-/* ----------------------------------------------------------
-   FUNÇÕES AUXILIARES
------------------------------------------------------------ */
-
+// Funções auxiliares
 function createTempFilePath(url) {
   // Segurança: garante que é string
   if (!url || typeof url !== 'string') {
@@ -80,10 +77,6 @@ function cleanupTempFiles(filePaths) {
     }
   });
 }
-
-/* ----------------------------------------------------------
-   PROCESSADORES POR PLATAFORMA
------------------------------------------------------------ */
 
 async function processInstagramMedia(mediaData) {
   if (!mediaData?.url_list?.length) throw new Error('Nenhuma mídia no Instagram');
@@ -166,10 +159,7 @@ async function processYouTubeMedia(url, quality = '720p') {
   }
 }
 
-/* ----------------------------------------------------------
-   DOWNLOAD + ENVIO
------------------------------------------------------------ */
-
+// Download e envio da mídia
 async function downloadAndSendMedia(client, originalMessage, media, platform) {
   // Extrai URL string com segurança
   const url = typeof media.url === 'string' ? media.url : media.url?.url;
@@ -200,10 +190,7 @@ async function downloadAndSendMedia(client, originalMessage, media, platform) {
   }
 }
 
-/* ----------------------------------------------------------
-   HANDLER PRINCIPAL
------------------------------------------------------------ */
-
+// Handler de download de mídias sociais
 async function handleSocialMediaDownload({ client, message, sender, groupId }) {
   const tempFiles = [];
   let platform = 'Mídia Social';

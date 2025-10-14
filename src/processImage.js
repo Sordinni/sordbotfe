@@ -2,7 +2,7 @@ const { decryptMedia } = require('@open-wa/wa-automate');
 const { createCanvas, loadImage } = require('canvas');
 const { getUseStretch, getUserMeta } = require('./userMeta');
 
-/* ---- stretch helper ---- */
+// Função para aplicar stretch
 const stretchImage = async (base64Image) => {
   const canvas = createCanvas();
   const img = await loadImage(base64Image);
@@ -14,7 +14,7 @@ const stretchImage = async (base64Image) => {
   return canvas.toBuffer('image/jpeg');
 };
 
-/* ---- handler ---- */
+// Converte imagem em figurinha
 async function processImage(client, message) {
   try {
     const chatId = message.chatId;

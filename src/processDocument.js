@@ -1,11 +1,6 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta } = require('./userMeta');
 
-/**
- * Converte documento de imagem em figurinha
- * @param {import('@open-wa/wa-automate').Client} client
- * @param {import('@open-wa/wa-automate').Message} message
- */
 async function processDocument(client, message) {
   try {
     const chatId = message.chatId;
