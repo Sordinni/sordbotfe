@@ -109,6 +109,7 @@ async function sendHelp(client, chatId, messageId) {
 • 📷 Envie uma *imagem* → vira sticker
 • 🎥 Envie *vídeo/GIF* (até 10 s) → sticker animado
 • 📁 Envie *arquivo de imagem* → sticker
+• ⬇️ Envie link de *Twitter, Instagram, TikTok ou Pinterest* → baixa mídia
 
 *Comandos:*
 • \`ajuda\` → esta mensagem

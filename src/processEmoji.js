@@ -1,5 +1,4 @@
-// src/processEmoji.js
-const { getUserMeta } = require('./userMeta');   // ← fix do import
+const { getUserMeta } = require('./userMeta');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -10,7 +9,7 @@ const execPromise = util.promisify(exec);
 const STICKERS_DIR = path.join(__dirname, '..', 'stickers_temp');
 if (!fs.existsSync(STICKERS_DIR)) fs.mkdirSync(STICKERS_DIR, { recursive: true });
 
-/* ---------- downloader ---------- */
+// Download
 async function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
@@ -25,7 +24,7 @@ async function downloadFile(url, destPath) {
   });
 }
 
-/* ---------- gif → mp4 ---------- */
+// Formato GIF → MP4
 async function gifToMp4(gifPath) {
   const mp4Path = gifPath.replace(/\.gif$/i, '.mp4');
   await execPromise(
@@ -34,7 +33,7 @@ async function gifToMp4(gifPath) {
   return mp4Path;
 }
 
-/* ---------- extrai ID ---------- */
+// Extrai ID do texto
 function extractId(text) {
   const match =
     text.match(/emoji\.gg\/\w+\/(\d+-[\w-]+)/i) ||
@@ -43,7 +42,7 @@ function extractId(text) {
   return match ? match[1] || match[2] || match[3] : null;
 }
 
-/* ---------- gera URLs ---------- */
+// Gera URLs possíveis
 function buildUrls(id) {
   return [
     `https://cdn.stickers.gg/stickers/${id}.gif`,
@@ -55,7 +54,7 @@ function buildUrls(id) {
   ];
 }
 
-/* ---------- handler ---------- */
+// Manipula mensagem de emoji
 async function handleEmoji(client, message) {
   const text = (message.body || '').trim();
   console.log(`[EMOJI-GG/STICKERS-GG] Texto recebido: "${text}"`);
@@ -118,7 +117,7 @@ async function handleEmoji(client, message) {
       await client.sendMp4AsSticker(
         message.chatId,
         finalBuffer,
-        { fps: 60, startTime: '00:00:00.0', endTime: '00:00:10.0', loop: 0, square: 240 },
+        { fps: 60, endTime: '00:00:10.0', loop: 0, square: 240 },
         stickerMetadata,
         message.id
       );
