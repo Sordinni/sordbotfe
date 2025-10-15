@@ -59,55 +59,61 @@ async function start(client) {
     }
 
 client.onMessage(async (message) => {
-    // início do cronômetro
-  const start = Date.now();
   try {
-    if (!message.isGroupMsg) return;
-    if (message.caption && message.caption.trim()) return;
+    if (!message.isGroupMsg) return;          // ignora PV
+    if (message.caption && message.caption.trim()) return; // ignora legendas
 
     msgCount++;
     if (msgCount >= 200) await cleanCache();
 
-    // Log das ações
-    logAction(
-      `Mensagem recebida: "${message.body || message.type}"`,
-      message.sender,
-      message.chat,
-      start
-    );
-
-    // Função para logar Alternar
-    const t0 = Date.now();
-    await handleToggle(client, message);
-    logAction('Comando alternar executado', message.sender, message.chat, t0);
-
-    // Handle rename sticker
-    const t1 = Date.now();
-    await handleRenameSticker(client, message);
-    logAction('Comando renomear executado', message.sender, message.chat, t1);
-
-    // Função para logar download de mídia social
-    const t2 = Date.now();
-    const socialMediaProcessed = await handleSocialMediaDownload({
-      client,
-      message,
-      sender: message.sender.id,
-      groupId: message.chatId
-    });
-    if (socialMediaProcessed)
-      logAction('Download de mídia social executado', message.sender, message.chat, t2);
-
-    // Logar Ajuda
     const body = (message.body || '').trim().toLowerCase();
+    let processed = false; // flag para saber se “fez algo”
+
+    /* ---------- AJUDA ---------- */
     if (body === '!ajuda' || body === 'ajuda') {
-      const t3 = Date.now();
+      const t0 = Date.now();
       await sendHelp(client, message.chatId, message.id);
-      logAction('Comando ajuda executado', message.sender, message.chat, t3);
-      return;
+      logAction('Comando ajuda executado', message.sender, message.chat, t0);
+      processed = true;
     }
 
-    // Logar fig
-    if (body === 'fig') {
+    /* ---------- ALTERNAR ---------- */
+    if (!processed) {
+      const t1 = Date.now();
+      const toggled = await handleToggle(client, message);
+      if (toggled) {
+        logAction('Comando alternar executado', message.sender, message.chat, t1);
+        processed = true;
+      }
+    }
+
+    /* ---------- RENOMEAR STICKER ---------- */
+    if (!processed) {
+      const t2 = Date.now();
+      const renamed = await handleRenameSticker(client, message);
+      if (renamed) {
+        logAction('Comando renomear executado', message.sender, message.chat, t2);
+        processed = true;
+      }
+    }
+
+    /* ---------- DOWNLOAD REDE SOCIAL ---------- */
+    if (!processed) {
+      const t3 = Date.now();
+      const socialProcessed = await handleSocialMediaDownload({
+        client,
+        message,
+        sender: message.sender.id,
+        groupId: message.chatId
+      });
+      if (socialProcessed) {
+        logAction('Download de mídia social executado', message.sender, message.chat, t3);
+        processed = true;
+      }
+    }
+
+    /* ---------- FIG (resposta a mídia) ---------- */
+    if (!processed && body === 'fig') {
       const t4 = Date.now();
       if (!message.quotedMsg) {
         await client.reply(
@@ -116,56 +122,67 @@ client.onMessage(async (message) => {
           message.id
         );
         logAction('Tentativa de fig sem mídia respondida', message.sender, message.chat, t4);
-        return;
+        processed = true;
+      } else {
+        const quoted = message.quotedMsg;
+        switch (quoted.type) {
+          case 'image':
+            await processImage(client, quoted);
+            logAction('Sticker criado (imagem via fig)', message.sender, message.chat, t4);
+            processed = true;
+            break;
+          case 'video':
+            await processVideo(client, quoted);
+            logAction('Sticker animado criado (vídeo via fig)', message.sender, message.chat, t4);
+            processed = true;
+            break;
+          case 'document':
+            await processDocument(client, quoted);
+            logAction('Sticker criado (documento via fig)', message.sender, message.chat, t4);
+            processed = true;
+            break;
+          default:
+            await client.reply(
+              message.chatId,
+              '❕ A mensagem respondida não é uma mídia válida.',
+              message.id
+            );
+            logAction('Tentativa de fig com mídia inválida', message.sender, message.chat, t4);
+            processed = true;
+        }
       }
-      const quoted = message.quotedMsg;
-      switch (quoted.type) {
+    }
+
+    /* ---------- EMOJI → STICKER ---------- */
+    if (!processed) {
+      const t5 = Date.now();
+      const emojiSent = await handleEmoji(client, message);
+      if (emojiSent) {
+        logAction('Sticker de emoji criado', message.sender, message.chat, t5);
+        processed = true;
+      }
+    }
+
+    /* ---------- MÍDIA DIRETA ---------- */
+    if (!processed) {
+      const t6 = Date.now();
+      switch (message.type) {
         case 'image':
-          await processImage(client, quoted);
-          logAction('Sticker criado (imagem via fig)', message.sender, message.chat, t4);
+          await processImage(client, message);
+          logAction('Sticker criado (imagem direta)', message.sender, message.chat, t6);
+          processed = true;
           break;
         case 'video':
-          await processVideo(client, quoted);
-          logAction('Sticker animado criado (vídeo via fig)', message.sender, message.chat, t4);
+          await processVideo(client, message);
+          logAction('Sticker animado criado (vídeo direto)', message.sender, message.chat, t6);
+          processed = true;
           break;
         case 'document':
-          await processDocument(client, quoted);
-          logAction('Sticker criado (documento via fig)', message.sender, message.chat, t4);
+          await processDocument(client, message);
+          logAction('Sticker criado (documento direto)', message.sender, message.chat, t6);
+          processed = true;
           break;
-        default:
-          await client.reply(
-            message.chatId,
-            '❕ A mensagem respondida não é uma mídia válida.',
-            message.id
-          );
-          logAction('Tentativa de fig com mídia inválida', message.sender, message.chat, t4);
       }
-      return;
-    }
-
-    // Emojis
-    const t5 = Date.now();
-    const emojiSent = await handleEmoji(client, message);
-    if (emojiSent) {
-      logAction('Sticker de emoji criado', message.sender, message.chat, t5);
-      return;
-    }
-
-    // Mídia direta (imagem, vídeo ou documento)
-    const t6 = Date.now();
-    switch (message.type) {
-      case 'image':
-        await processImage(client, message);
-        logAction('Sticker criado (imagem direta)', message.sender, message.chat, t6);
-        break;
-      case 'video':
-        await processVideo(client, message);
-        logAction('Sticker animado criado (vídeo direto)', message.sender, message.chat, t6);
-        break;
-      case 'document':
-        await processDocument(client, message);
-        logAction('Sticker criado (documento direto)', message.sender, message.chat, t6);
-        break;
     }
   } catch (error) {
     console.error('Erro:', error.message);
