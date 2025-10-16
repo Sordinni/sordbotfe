@@ -39,8 +39,6 @@ function createTempFilePath(url) {
 
 async function downloadFile(url, filePath) {
   try {
-    console.log(`📥 Baixando: ${url}`);
-
     const response = await axios({
       method: 'GET',
       url,
@@ -70,7 +68,6 @@ function cleanupTempFiles(filePaths) {
     if (fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
-        console.log(`🧹 Removido: ${filePath}`);
       } catch (e) {
         console.error('Erro ao remover temp:', e);
       }
@@ -119,15 +116,7 @@ async function processTwitterMedia(mediaData) {
 }
 
 async function processYouTubeMedia(url, quality = '720p') {
-  console.log('[DEBUG] processYouTubeMedia() chamada');
-  console.log('[DEBUG] url recebida:', url);
-  console.log('[DEBUG] quality recebida:', quality);
-
   try {
-    // yt-stream exige ID ou URL completa – ambos funcionam
-    console.log('[DEBUG] Chamando download() da yt-stream...');
-
-    // Escolha a qualidade desejada (melhor disponível ≤ 720p)
     const stream = download(url, {
       quality: quality, // ex: '720p', '480p', etc
       type: 'video',
@@ -145,9 +134,6 @@ async function processYouTubeMedia(url, quality = '720p') {
       write.on('finish', resolve);
       write.on('error', reject);
     });
-
-    console.log('[DEBUG] Download concluído:', filePath);
-
     // Monta caption
     const caption = `YouTube\n🔗 ${url}`;
 
@@ -182,7 +168,6 @@ async function downloadAndSendMedia(client, originalMessage, media, platform) {
       await client.sendFile(originalMessage.chatId, filePath, 'arquivo.bin', caption, originalMessage.id);
     }
 
-    console.log(`✅ Mídia ${platform} enviada.`);
     return { filePath, type: media.type };
   } catch (err) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -220,7 +205,6 @@ async function handleSocialMediaDownload({ client, message, sender, groupId }) {
       return false; // não é suportado
     }
 
-    console.log(`📥 Detectado ${platform} no grupo ${groupId} por ${sender}: ${url}`);
     await client.react(message.id, '⌛');
 
     const medias = await mediaProcessor();

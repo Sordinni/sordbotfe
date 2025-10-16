@@ -20,7 +20,6 @@ async function processDocument(client, message) {
       crop: false,
     };
 
-    console.log('📄 Processando documento...');
 
     if (!mimeType || !mimeType.startsWith('image/')) {
       await client.sendText(
@@ -41,13 +40,12 @@ async function processDocument(client, message) {
     );
 
     if (result) {
-      console.log('✅ Figurinha de documento enviada com sucesso!');
     } else {
-      await client.sendText(chatId, '❌ Erro ao criar figurinha do arquivo.', messageId);
+      await client.reply(chatId, '❌ Erro ao criar figurinha do arquivo.', messageId);
     }
   } catch (error) {
     console.error('Erro ao processar documento:', error);
-    await client.sendText(message.chatId, '❌ Erro ao processar o arquivo.', message.id);
+    await client.reply(chatId, '❌ Erro ao processar o arquivo.', messageId);
   }
 }
 

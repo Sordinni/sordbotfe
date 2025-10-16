@@ -21,7 +21,6 @@ async function processImage(client, message) {
     const messageId = message.id;
     const userId = message.sender.id;
     await client.react(messageId, '🖐️');
-    console.log('📷 Processando imagem...');
 
     // ⭐️ METADADOS DINÂMICOS ⭐️
     const userMeta = getUserMeta(userId) || {
@@ -38,7 +37,6 @@ async function processImage(client, message) {
     let mediaData = await decryptMedia(message);
     if (getUseStretch(userId)) {
       mediaData = await stretchImage(mediaData);
-      console.log('🔀 Imagem stretch aplicada');
     }
 
     const result = await client.sendImageAsStickerAsReply(
@@ -50,13 +48,12 @@ async function processImage(client, message) {
 
     if (result) {
       await client.deleteMessage(chatId, message.id);
-      console.log('✅ Figurinha de imagem enviada');
     } else {
-      await client.sendText(chatId, '❌ Erro ao criar figurinha da imagem.', messageId);
+      await client.reply(chatId, '❌ Erro ao criar figurinha da imagem.', messageId);
     }
   } catch (error) {
     console.error('Erro ao processar imagem:', error);
-    await client.sendText(message.chatId, '❌ Erro ao processar a imagem.', message.id);
+    await client.reply(chatId, '❌ Erro ao processar a imagem.', messageId);
   }
 }
 

@@ -25,7 +25,6 @@ async function processVideo(client, message) {
 
 // 2. coloca o lock
   processing.set(key, true);
-  console.log(`🎥 Processando vídeo de ${userId}...`);
 
   try {
     const mediaData = await decryptMedia(message);
@@ -38,7 +37,6 @@ async function processVideo(client, message) {
     };
 
     for (const fps of FPS_POOL) {
-      console.log(`🔧 ${key} -> tentando ${fps} FPS`);
       const opts = {
         fps,
         startTime: '00:00:00.0',
@@ -58,7 +56,6 @@ async function processVideo(client, message) {
 
         if (result) {
       await client.deleteMessage(chatId, message.id);
-      console.log('✅ Figurinha de vídeo enviada');
           return; // sucesso
         }
       } catch (e) {
