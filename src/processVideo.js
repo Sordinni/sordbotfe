@@ -1,5 +1,4 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
-const { autoSaveSticker } = require('./stickerManager');
 const { getUserMeta } = require('./userMeta');
 
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
@@ -54,7 +53,7 @@ async function processVideo(client, message) {
           stickerMetadata,
           messageId
         );
-await autoSaveSticker(userId, mediaData);
+
         if (result) {
 await client.deleteMessage(chatId, message.id);
 return;            // ← interrompe o loop
