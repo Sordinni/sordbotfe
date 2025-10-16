@@ -1,46 +1,49 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta } = require('./userMeta');
 const { autoSaveSticker } = require('./stickerManager');
+
+// Pool de FPS que serão testados (do mais alto para o mais baixo)
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 
-// Mapa de bloqueio para evitar processamento concorrente
-const processing = new Map(); // key => "chatId_senderId"
+// Evita que o mesmo vídeo seja processado mais de uma vez simultaneamente
+const processing = new Map(); 
 
 function lockKey(message) {
   return `${message.chatId}_${message.sender.id}`;
 }
 
 async function processVideo(client, message) {
-  const key = lockKey(message);
+  const key   = lockKey(message);
   const chatId = message.chatId;
-  const messageId = message.id;
+  const msgId  = message.id;
   const userId = message.sender.id;
 
-  await client.react(messageId, `🖐️`);
+  // Reação inicial
+  await client.react(msgId, '🖐️');
 
-// 1. verifica se já está processando
-  if (processing.has(key)) {
-    return;
-  }
+  // 1. Já está processando? Ignora
+  if (processing.has(key)) return;
 
-// 2. coloca o lock
+  // 2. Lock
   processing.set(key, true);
 
   try {
+    // Decripta o vídeo
     const mediaData = await decryptMedia(message);
 
-    /* ⭐️ METADADOS DINÂMICOS COM FALLBACK ⭐️ */
+    /* METADADOS DINÂMICOS COM FALLBACK */
     const userMeta = getUserMeta(userId) || {};
     const stickerMetadata = {
       author: userMeta.author || 'So𝘳dBOT',
-      pack: userMeta.pack || 'figurinha por',
+      pack:   userMeta.pack   || 'figurinha por',
     };
 
+    // Tenta cada FPS até conseguir enviar
     for (const fps of FPS_POOL) {
       const opts = {
         fps,
         startTime: '00:00:00.0',
-        endTime: '00:00:10.0',
+        endTime:   '00:00:10.0',
         loop: 0,
         square: 240,
       };
@@ -51,30 +54,32 @@ async function processVideo(client, message) {
           mediaData,
           opts,
           stickerMetadata,
-          messageId
+          msgId
         );
 
-if (result) {
-  await autoSaveSticker(userId, mediaData);
-  await client.deleteMessage(chatId, message.id);
-  return;
-}
+        // SUCESSO: @open-wa pode retornar undefined, mas NÃO null/false
+        if (result !== null && result !== false) {
+          await autoSaveSticker(userId, mediaData); // salva no histórico
+          await client.deleteMessage(chatId, message.id); // apaga o vídeo
+          return; // ← interrompe o loop e a função
+        }
       } catch (e) {
         console.warn(`❌ ${fps} FPS falhou para ${key}:`, e.message);
       }
     }
 
+    // Se chegou aqui, nenhum FPS funcionou
     await client.reply(
       chatId,
       '❌ Não consegui gerar a figurinha em nenhuma taxa de FPS.',
-      messageId
+      msgId
     );
-    await client.react(messageId, `🥲`);
+    await client.react(msgId, '🥲');
   } catch (err) {
     console.error('Erro ao processar vídeo:', err);
-    await client.reply(chatId, '❌ Erro ao processar o vídeo.', messageId);
+    await client.reply(chatId, '❌ Erro ao processar o vídeo.', msgId);
   } finally {
-    // 3. sempre libera o lock
+    // Libera o lock SEMPRE
     processing.delete(key);
   }
 }
