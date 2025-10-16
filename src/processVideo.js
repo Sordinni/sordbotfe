@@ -54,12 +54,10 @@ async function processVideo(client, message) {
           stickerMetadata,
           messageId
         );
-
+await autoSaveSticker(userId, mediaData);
         if (result) {
-          await autoSaveSticker(userId, mediaData).then(() => {
-            client.deleteMessage(chatId, message.id);
-          });
-          return; // sucesso
+await client.deleteMessage(chatId, message.id);
+return;            // ← interrompe o loop
         }
       } catch (e) {
         console.warn(`❌ ${fps} FPS falhou para ${key}:`, e.message);
