@@ -7,6 +7,7 @@
     "instagram-url-direct": "^2.0.7",
     "sharp": "^0.34.4",
     "wa-sticker-formatter": "^4.4.4",
+    "webp-converter": "^2.3.3",
     "yt-stream": "^1.7.4"
   }
 }

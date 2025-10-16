@@ -4,3 +4,9 @@ stickers_download
 /src/temp/
 /sessão/*
 /db/users.json
+sessão
+# managed by open-wa
+**.data.json
+**.node-persist**
+**_IGNORE_**
+# end managed by open-wa

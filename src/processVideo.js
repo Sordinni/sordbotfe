@@ -1,6 +1,6 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta } = require('./userMeta');
-
+const { autoSaveSticker } = require('./stickerManager');
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 
 // Mapa de bloqueio para evitar processamento concorrente
@@ -54,10 +54,11 @@ async function processVideo(client, message) {
           messageId
         );
 
-        if (result) {
-      await client.deleteMessage(chatId, message.id);
-          return; // sucesso
-        }
+if (result) {
+  await autoSaveSticker(userId, mediaData);
+  await client.deleteMessage(chatId, message.id);
+  return;
+}
       } catch (e) {
         console.warn(`❌ ${fps} FPS falhou para ${key}:`, e.message);
       }

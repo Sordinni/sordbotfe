@@ -5,6 +5,7 @@ const https = require('https');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const {autoSaveSticker}= require('./stickerManager')
 
 const STICKERS_DIR = path.join(__dirname, '..', 'stickers_temp');
 if (!fs.existsSync(STICKERS_DIR)) fs.mkdirSync(STICKERS_DIR, { recursive: true });
@@ -114,6 +115,7 @@ async function handleEmoji(client, message) {
         stickerMetadata,
         message.id
       );
+      await autoSaveSticker(userId, finalBuffer);            // ✅
     } else {
       await client.sendImageAsStickerAsReply(
         message.chatId,
@@ -121,6 +123,7 @@ async function handleEmoji(client, message) {
         message.id,
         stickerMetadata
       );
+      await autoSaveSticker(userId, finalBuffer);            // ✅
     }
 
   } catch (err) {
