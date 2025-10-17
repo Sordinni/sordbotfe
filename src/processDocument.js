@@ -1,6 +1,5 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { getUserMeta } = require('./userMeta');
-const { autoSaveSticker } = require('./stickerManager');
 async function processDocument(client, message) {
   try {
     const chatId = message.chatId;
@@ -40,7 +39,6 @@ async function processDocument(client, message) {
     );
 
 if (result) {
-  await autoSaveSticker(userId, mediaData);
     } else {
       await client.reply(chatId, '❌ Erro ao criar figurinha do arquivo.', messageId);
     }

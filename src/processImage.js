@@ -1,8 +1,6 @@
 const { decryptMedia } = require('@open-wa/wa-automate');
 const { createCanvas, loadImage } = require('canvas');
 const { getUseStretch, getUserMeta } = require('./userMeta');
-const { autoSaveSticker } = require('./stickerManager');
-// Função para aplicar stretch
 const stretchImage = async (base64Image) => {
   const canvas = createCanvas();
   const img = await loadImage(base64Image);
@@ -47,7 +45,6 @@ async function processImage(client, message) {
     );
 
     if (result) {
-      await autoSaveSticker(userId, mediaData);
       await client.deleteMessage(chatId, message.id);
     } else {
       await client.reply(chatId, '❌ Erro ao criar figurinha da imagem.', messageId);

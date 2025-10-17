@@ -7,7 +7,6 @@ const { handleToggle } = require('./src/toggleStretch');
 const { handleSocialMediaDownload } = require('./src/social-downloader');
 const { handleRenameSticker } = require('./src/renameStickerMeta');
 const { handleEmoji } = require('./src/processEmoji');
-const { handleGuardar, handleEnviarFavs, handleFavLista} = require('./src/stickerManager'); // importa a função handleGuardar
 
 // Configurações do SordBOT FE
 const config = {
@@ -153,32 +152,6 @@ client.onMessage(async (message) => {
         }
       }
     }
-
-/* ---------- GUARDAR STICKER ---------- */
-if (!processed && body === 'guardar') {
-  const t7 = Date.now();
-  const saved = await handleGuardar(client, message);
-  if (saved) {
-    logAction('Sticker guardado', message.sender, message.chat, t7);
-    processed = true;
-  }
-}
-/* ---------- ENVIAR FAVORITOS ---------- */
-if (!processed && body === 'fav') {
-  const t8 = Date.now();
-  const sent = await handleEnviarFavs(client, message);
-  if (sent) {
-    logAction('Sticker favorito enviado', message.sender, message.chat, t8);
-    processed = true;
-  }
-}
-/* ---------- COLLAGE DE FAVORITOS ---------- */
-if (!processed && body === 'fav lista') {
-  const t9 = Date.now();
-  const ok = await handleFavLista(client, message);
-  if (ok) logAction('Collage de favs gerado', message.sender, message.chat, t9);
-  processed = true;
-}
     /* ---------- EMOJI → STICKER ---------- */
     if (!processed) {
       const t5 = Date.now();
