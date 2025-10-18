@@ -20,8 +20,6 @@ async function stretchImage(buffer) {
   return canvas.toBuffer('image/jpeg');
 }
 
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-
 async function safeDownload(sock, msg, type, attempts = 3, delay = 300) {
   for (let i = 1; i <= attempts; i++) {
     try {
