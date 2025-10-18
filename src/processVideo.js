@@ -2,9 +2,10 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
 const { getUserMeta } = require('./userMeta');
-const { spawn } = require('child_process');
+const ffmpeg = require('fluent-ffmpeg');
+const { tmpdir } = require('os');
+const { join } = require('path');
 const fs = require('fs');
-const path = require('path');
 
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 
@@ -30,7 +31,7 @@ async function processVideo(sock, mediaObj, fullMsg) {
     /* metadados dinâmicos */
     const meta = getUserMeta(user) || {};
     const pack = meta.pack || 'figurinha por';
-    const author = meta.author || 'SoRdBOT';
+    const author = meta.author || 'So𝘳dBOT';
 
     /* baixa o vídeo/GIF */
     const buffer = await downloadMediaMessage(
@@ -40,69 +41,60 @@ async function processVideo(sock, mediaObj, fullMsg) {
       { logger: sock.logger }
     );
 
-    /* salva o vídeo/GIF em um arquivo temporário */
-    const tempVideoPath = path.join(__dirname, 'temp', `${Date.now()}.mp4`);
-    fs.writeFileSync(tempVideoPath, buffer);
+    /* tenta gerar o webp em cada FPS do pool */
+    for (const fps of FPS_POOL) {
+      try {
+        const inputPath = join(tmpdir(), `${key}_input.mp4`);
+        const outputPath = join(tmpdir(), `${key}_output.mp4`);
 
-    /* corta o vídeo para a proporção 1:1 usando ffmpeg */
-    const croppedVideoPath = path.join(__dirname, 'temp', `${Date.now()}_cropped.mp4`);
-    const ffmpegCrop = spawn('ffmpeg', [
-      '-i', tempVideoPath,
-      '-filter:v', 'crop=in_w:in_w', // corta para proporção 1:1
-      '-c:v', 'libx264',
-      '-crf', '25', // taxa de compressão (maior valor = mais compressão)
-      '-preset', 'veryfast',
-      '-maxrate', '100k', // taxa máxima de bits
-      '-bufsize', '200k', // tamanho do buffer
-      croppedVideoPath
-    ]);
+        fs.writeFileSync(inputPath, buffer);
 
-    ffmpegCrop.on('close', async (code) => {
-      if (code !== 0) {
-        console.error('Erro ao cortar vídeo usando ffmpeg');
-        await sock.sendMessage(jid, {
-          text: '❌ Erro ao cortar o vídeo.'
-        }, { quoted: fullMsg });
-        return;
+        await new Promise((resolve, reject) => {
+          ffmpeg(inputPath)
+            .outputOptions([
+              '-vf scale=512:512:force_original_aspect_ratio=increase,crop=512:512',
+              '-r', fps.toString(),
+              '-t', '10',
+              '-an'
+            ])
+            .output(outputPath)
+            .on('end', resolve)
+            .on('error', reject)
+            .run();
+        });
+
+        const croppedBuffer = fs.readFileSync(outputPath);
+
+        const webp = await new Sticker(croppedBuffer, {
+          type: StickerTypes.FULL,
+          pack,
+          author,
+          fps,
+          startTime: '00:00:00.0',
+          endTime: '00:00:10.0',
+          quality: 40,
+        }).toBuffer();
+
+        /* envia sticker */
+        await sock.sendMessage(jid, { sticker: webp }, { quoted: fullMsg });
+
+        /* apaga mensagem original (opcional) */
+        await sock.sendMessage(jid, { delete: fullMsg.key });
+
+        // limpeza
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(outputPath);
+        return;                       // sucesso → sai
+      } catch (e) {
+        console.warn(`❌ ${fps} FPS falhou para ${key}:`, e.message);
       }
+    }
 
-      /* lê o vídeo cortado */
-      const croppedBuffer = fs.readFileSync(croppedVideoPath);
-
-      /* tenta gerar o webp em cada FPS do pool */
-      for (const fps of FPS_POOL) {
-        try {
-          const webp = await new Sticker(croppedBuffer, {
-            type: StickerTypes.FULL,
-            pack,
-            author,
-            fps,
-            startTime: '00:00:00.0',
-            endTime: '00:00:10.0',
-            quality: 40,
-          }).toBuffer();
-
-          /* envia sticker */
-          await sock.sendMessage(jid, { sticker: webp }, { quoted: fullMsg });
-
-          /* apaga mensagem original (opcional) */
-          await sock.sendMessage(jid, { delete: fullMsg.key });
-          return;                       // sucesso → sai
-        } catch (e) {
-          console.warn(`❌ ${fps} FPS falhou para ${key}:`, e.message);
-        }
-      }
-
-      /* nenhum FPS funcionou */
-      await sock.sendMessage(jid, {
-        text: '❌ Não consegui gerar a figurinha em nenhuma taxa de FPS.'
-      }, { quoted: fullMsg });
-      await sock.sendMessage(jid, { react: { text: '🥲', key: fullMsg.key } });
-    });
-
-    ffmpegCrop.stderr.on('data', (data) => {
-      console.log(data.toString());
-    });
+    /* nenhum FPS funcionou */
+    await sock.sendMessage(jid, {
+      text: '❌ Não consegui gerar a figurinha em nenhuma taxa de FPS.'
+    }, { quoted: fullMsg });
+    await sock.sendMessage(jid, { react: { text: '🥲', key: fullMsg.key } });
   } catch (err) {
     console.error('Erro ao processar vídeo:', err);
     await sock.sendMessage(jid, {
