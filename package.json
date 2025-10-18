@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@hapi/boom": "^10.0.1",
+    "@open-wa/wa-automate": "^4.76.0",
     "@whiskeysockets/baileys": "^6.7.20",
     "btch-downloader": "^6.0.5",
     "canvas": "^3.2.0",

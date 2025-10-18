@@ -15,6 +15,7 @@ const { handleToggle }    = require('./src/toggleStretch');
 const { handleSocialMediaDownload } = require('./src/social-downloader');
 const { handleRenameSticker }       = require('./src/renameStickerMeta');
 const { handleEmoji }     = require('./src/processEmoji');
+const { handlePing } = require('./src/ping');
 
 /* ---------- Logger ---------- */
 const logger = pino({ level: 'fatal' });
@@ -31,7 +32,6 @@ function logAction(action, user, chat, start = Date.now()) {
   );
 }
 
-/* ---------- Inicialização ---------- */
 async function start() {
   const { version } = await fetchLatestBaileysVersion();
   const { state, saveCreds } = await useMultiFileAuthState('./sessão');
@@ -165,7 +165,13 @@ async function start() {
           }
         }
       }
-
+/* ---------- PING ---------- */
+if (lower === 'ping') {
+  const t0 = Date.now();
+  await handlePing(sock, safeMessage);
+  logAction('Comando ping executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t0);
+  processed = true;
+}
       /* ---------- EMOJI ---------- */
       if (!processed) {
         const t5 = Date.now();
@@ -205,12 +211,15 @@ async function sendHelp(sock, jid, quote) {
 • 📷 Envie uma imagem → vira sticker
 • 🎥 Envie vídeo/GIF (até 10 s) → sticker animado
 • ⬇️ Envie link de Twitter, Instagram, TikTok ou Pinterest → baixa mídia
-Comandos:
+
+*Comandos:*
 • \`ajuda\` → esta mensagem
 • \`alternar\` → liga/desliga stretch
 • \`fig\` → responda mídia com fig para virar sticker
 • \`renomear "nome" "autor"\` → renomeia os stickers
-Extras:
+• \`ping\` → verifica se o bot está online
+
+*Extras:*
 • Cache limpo a cada 200 mensagens
 • Só funciona em grupos`;
 await sock.sendMessage(jid, { text }, quote);
