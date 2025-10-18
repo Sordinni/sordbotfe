@@ -1,93 +1,75 @@
-const { decryptMedia } = require('@open-wa/wa-automate');
+/* renameStickerMeta.js – reescrito para Baileys 6.7.20 (JS puro) */
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { getUserMeta, setUserMeta, resetUserMeta } = require('./userMeta');
 
 const ALIASES = ['renomear', 'r', 'ren'];
 
-async function handleRenameSticker(client, message) {
-  if (!message.isGroupMsg) return;
+async function handleRenameSticker(sock, msg) {
+  const jid = msg.key.remoteJid;
+  if (!jid.endsWith('@g.us')) return false;          // só grupos
 
-  const body = (message.body || '').trim();
+  const body = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '')
+    .trim();
   const cmd = body.split(/\s+/)[0].toLowerCase();
-
-  if (!ALIASES.includes(cmd)) return;
+  if (!ALIASES.includes(cmd)) return false;
 
   const args = body.slice(cmd.length).trim();
-  const userId = message.sender.id;
+  const userId = msg.participant || msg.key.participant;
 
-  // Comando para resetar metadados
+  /* ---------- resetar ---------- */
   if (args === 'resetar') {
     resetUserMeta(userId);
-    await client.reply(
-      message.chatId,
-      '✅ Metadados *resetados* para os padrões do bot.',
-      message.id
-    );
-    return;
+    await sock.sendMessage(jid, {
+      text: '✅ Metadados *resetados* para os padrões do bot.'
+    }, { quoted: msg });
+    return true;
   }
 
-  // Se respondeu uma figurinha
-  if (message.quotedMsg && message.quotedMsg.type === 'sticker') {
-    const match = args.match(/^["“](.+?)["”]\s+["“](.+?)["”]$/);
-    if (!match) {
-      await client.reply(
-        message.chatId,
-        '❕ Resposta a uma figurinha:\n`renomear "pacote" "autor"`',
-        message.id
-      );
-      return;
-    }
-    const [, pack, author] = match;
+  /* ---------- renomear via resposta a figurinha ---------- */
+  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const isReplySticker = quoted && quoted.stickerMessage;
 
-    try {
-      // Baixa a figurinha original
-      const mediaData = await decryptMedia(message.quotedMsg);
-
-      // Monta novos metadados
-      const stickerMetadata = {
-        author,
-        pack,
-        keepScale: true,
-        crop: false,
-      };
-
-      // Re-envia com novos metadados
-      const result = await client.sendImageAsStickerAsReply(
-        message.chatId,
-        mediaData,
-        message.id,
-        stickerMetadata
-      );
-
-      if (result) {
-        await client.react(message.id, '✅');
-      } else {
-        await client.reply(message.chatId, '❌ Erro ao re-enviar figurinha.', message.id);
-      }
-    } catch (e) {
-      console.error('Erro ao renomear figurinha:', e);
-      await client.reply(message.chatId, '❌ Erro ao processar figurinha.', message.id);
-    }
-    return;
-  }
-
-  // Renomear padrão (antigo)
   const match = args.match(/^["“](.+?)["”]\s+["“](.+?)["”]$/);
   if (!match) {
-    await client.reply(
-      message.chatId,
-      '❕ Uso:\n`renomear "pacote" "autor"`\n`renomear resetar`',
-      message.id
-    );
-    return;
+    await sock.sendMessage(jid, {
+      text: '❕ Uso:\n`renomear "pacote" "autor"`\n`renomear resetar`'
+    }, { quoted: msg });
+    return true;
   }
   const [, pack, author] = match;
-  setUserMeta(userId, { pack, author });
 
-  await client.reply(
-    message.chatId,
-    `✅ Metadados atualizados!\n📦 *Pacote:* ${pack}\n✍️ *Autor:* ${author}`,
-    message.id
-  );
+  if (isReplySticker) {
+    try {
+      const mediaBuffer = await downloadMediaMessage(
+        { key: msg.message.extendedTextMessage.contextInfo.stanzaId, message: quoted },
+        'buffer',
+        {},
+        { logger: sock.logger }
+      );
+
+      await sock.sendMessage(jid, {
+        sticker: mediaBuffer,
+        packname: pack,
+        author: author
+      }, { quoted: msg });
+
+      await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
+    } catch (e) {
+      console.error('Erro ao renomear figurinha:', e);
+      await sock.sendMessage(jid, {
+        text: '❌ Erro ao processar figurinha.'
+      }, { quoted: msg });
+    }
+    return true;
+  }
+
+  /* ---------- apenas salva metadados pro usuário ---------- */
+  setUserMeta(userId, { pack, author });
+  await sock.sendMessage(jid, {
+    text: `✅ Metadados atualizados!\n📦 *Pacote:* ${pack}\n✍️ *Autor:* ${author}`
+  }, { quoted: msg });
+
+  return true;
 }
 
 module.exports = { handleRenameSticker };

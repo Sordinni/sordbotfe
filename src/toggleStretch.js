@@ -1,19 +1,23 @@
+/* toggleStretch.js – reescrito para Baileys 6.7.20 (JS puro) */
 const { toggleStretch } = require('./userMeta');
 
-async function handleToggle(client, message) {
-  if (!message.isGroupMsg) return; // só em grupos
+async function handleToggle(sock, msg) {
+  const jid = msg.key.remoteJid;
+  if (!jid.endsWith('@g.us')) return false;          // só grupos
 
-  const body = (message.body || '').trim().toLowerCase();
-  if (body !== 'alternar') return; // não é o comando
+  const body = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '')
+    .trim()
+    .toLowerCase();
+  if (body !== 'alternar') return false;
 
-  const userId = message.sender.id;
-  const newState = toggleStretch(userId);
+  const userId = msg.participant || msg.key.participant;
+  const newState = toggleStretch(userId);            // true/false
 
-  await client.reply(
-    message.chatId,
-    `✅ *Stretch* ${newState ? 'ativado' : 'desativado'} para as suas figurinhas.`,
-    message.id
-  );
+  await sock.sendMessage(jid, {
+    text: `✅ Figurinhas esticadas ${newState ? 'ativadas' : 'desativadas'} para você.`
+  }, { quoted: msg });
+
+  return true;
 }
 
 module.exports = { handleToggle };

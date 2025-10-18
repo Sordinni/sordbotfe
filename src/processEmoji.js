@@ -1,3 +1,4 @@
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { getUserMeta } = require('./userMeta');
 const fs = require('fs');
 const path = require('path');
@@ -5,11 +6,12 @@ const https = require('https');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const sharp = require('sharp');
 
 const STICKERS_DIR = path.join(__dirname, '..', 'stickers_temp');
 if (!fs.existsSync(STICKERS_DIR)) fs.mkdirSync(STICKERS_DIR, { recursive: true });
 
-// Download
+// Baixa arquivo de URL
 async function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
@@ -24,7 +26,7 @@ async function downloadFile(url, destPath) {
   });
 }
 
-// Formato GIF → MP4
+// Converte GIF para MP4
 async function gifToMp4(gifPath) {
   const mp4Path = gifPath.replace(/\.gif$/i, '.mp4');
   await execPromise(
@@ -55,15 +57,17 @@ function buildUrls(id) {
 }
 
 // Manipula mensagem de emoji
-async function handleEmoji(client, message) {
-  const text = (message.body || '').trim();
-
+async function handleEmoji(sock, message) {
+  const text = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim();
   const emojiId = extractId(text);
   if (!emojiId) return false;
 
-  const userId = message.sender.id;
+  const userId = message.key.participant || message.key.remoteJid;
 
-  const userMeta = getUserMeta(userId) || { pack: 'figurinha por', author: 'So𝘳dBOT' };
+  const userMeta = getUserMeta(userId) || {
+    pack: 'figurinha por',
+    author: 'So𝘳dBOT'
+  };
 
   const safeName = `${emojiId}_${userMeta.pack}_${userMeta.author}`.replace(/[^a-z0-9_-]/gi, '_');
   const urls = buildUrls(emojiId);
@@ -80,22 +84,19 @@ async function handleEmoji(client, message) {
       isGif = ext === '.gif';
       break;
     } catch (e) {
+      // tenta próxima URL
     }
   }
 
   if (!localPath) {
-    await client.reply(message.chatId, '❌ Não consegui baixar esse emoji/sticker.', message.id);
+    await sock.sendMessage(message.key.remoteJid, {
+      text: '❌ Não consegui baixar esse emoji/sticker.',
+      quoted: message
+    });
     return true;
   }
 
   try {
-    const stickerMetadata = {
-      author: userMeta.author,
-      pack: userMeta.pack,
-      keepScale: true,
-      crop: false,
-    };
-
     let finalBuffer;
     let mp4Path = null;
 
@@ -107,29 +108,35 @@ async function handleEmoji(client, message) {
     }
 
     if (isGif) {
-      await client.sendMp4AsSticker(
-        message.chatId,
-        finalBuffer,
-        { fps: 60, endTime: '00:00:10.0', loop: 0, square: 240 },
-        stickerMetadata,
-        message.id
-      );
+      // Envia sticker animado (video)
+      await sock.sendMessage(message.key.remoteJid, {
+        sticker: finalBuffer,
+        quoted: message
+      }, { url: mp4Path });
     } else {
-      await client.sendImageAsStickerAsReply(
-        message.chatId,
-        finalBuffer,
-        message.id,
-        stickerMetadata
-      );
+      // Converte imagem para sticker
+      const stickerBuffer = await sharp(finalBuffer)
+        .webp()
+        .toBuffer();
+
+      await sock.sendMessage(message.key.remoteJid, {
+        sticker: stickerBuffer,
+        quoted: message
+      });
     }
 
   } catch (err) {
-    await client.reply(message.chatId, '❌ Não consegui enviar esse emoji/sticker.', message.id);
+    console.error('Erro ao enviar sticker:', err);
+    await sock.sendMessage(message.key.remoteJid, {
+      text: '❌ Não consegui enviar esse emoji/sticker.',
+      quoted: message
+    });
   } finally {
     if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
     const mp4Path = localPath?.replace(/\.gif$/i, '.mp4');
     if (mp4Path && fs.existsSync(mp4Path)) fs.unlinkSync(mp4Path);
   }
+
   return true;
 }
 

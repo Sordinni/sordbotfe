@@ -1,218 +1,219 @@
-// Carrega as dependências
-const { create } = require('@open-wa/wa-automate');
-const { processImage } = require('./src/processImage');
-const { processVideo } = require('./src/processVideo');
-const { processDocument } = require('./src/processDocument');
-const { handleToggle } = require('./src/toggleStretch');
+require('dotenv').config();
+const pino = require('pino');
+const {
+  default: makeWASocket,
+  DisconnectReason,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+} = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+
+// ---------- Módulos auxiliares ----------
+const { processImage }    = require('./src/processImage');
+const { processVideo }    = require('./src/processVideo');
+const { handleToggle }    = require('./src/toggleStretch');
 const { handleSocialMediaDownload } = require('./src/social-downloader');
-const { handleRenameSticker } = require('./src/renameStickerMeta');
-const { handleEmoji } = require('./src/processEmoji');
+const { handleRenameSticker }       = require('./src/renameStickerMeta');
+const { handleEmoji }     = require('./src/processEmoji');
 
-// Configurações do SordBOT FE
-const config = {
-    sessionId: 'SordBOT_FE',
-    multiDevice: true,
-    authTimeout: 60,
-    sessionDataPath: './sessão',
-    blockCrashLogs: true,
-    disableSpins: true,
-    headless: true,
-    hostNotificationLang: 'PT_BR',
-    logConsole: false,
-    popup: true,
-    qrTimeout: 0,
-};
+/* ---------- Logger ---------- */
+const logger = pino({ level: 'fatal' });
 
-// Inicia o bot
-create(config)
-    .then(start)
-    .catch(console.error);
-
-// Função para logar ações com detalhes e tempo decorrido
-const logAction = (action, user, chat, start = Date.now()) => {
+function logAction(action, user, chat, start = Date.now()) {
   const elapsed = Date.now() - start;
   const ts = new Date().toLocaleString('pt-BR');
   console.log(
     `\x1b[36m[${ts}]\x1b[0m ` +
-    `\x1b[33m${action}\x1b[0m ` +
-    `– \x1b[32m${user.pushname} (${user.id})\x1b[0m ` +
-    `no grupo \x1b[35m${chat.name}\x1b[0m ` +
+    `\x1b[33m${action}\x1b[0m – ` +
+    `\x1b[32m${user || 'Desconhecido'}\x1b[0m ` +
+    `no grupo \x1b[35m${chat?.name || chat}\x1b[0m ` +
     `(\x1b[31m${elapsed}ms\x1b[0m)`
   );
-};
-
-async function start(client) {
-    console.log('🤖 SordBOT FE iniciado!');
-
-    let msgCount = 0;
-
-    async function cleanCache() {
-        console.log('🧹 200 msgs – limpando caches...');
-        try {
-            await client.cutChatCache();
-            await client.cutMsgCache();
-            console.log('✅ Cache limpo');
-        } catch (e) {
-            console.warn('⚠️ Falha ao limpar cache (pode estar vazio):', e.message);
-        }
-        msgCount = 0;
-    }
-
-client.onMessage(async (message) => {
-  try {
-    if (!message.isGroupMsg) return;          // ignora PV
-    if (message.caption && message.caption.trim()) return; // ignora legendas
-
-    msgCount++;
-    if (msgCount >= 200) await cleanCache();
-
-    const body = (message.body || '').trim().toLowerCase();
-    let processed = false; // flag para saber se “fez algo”
-
-    /* ---------- AJUDA ---------- */
-    if (body === '!ajuda' || body === 'ajuda') {
-      const t0 = Date.now();
-      await sendHelp(client, message.chatId, message.id);
-      logAction('Comando ajuda executado', message.sender, message.chat, t0);
-      processed = true;
-    }
-
-    /* ---------- ALTERNAR ---------- */
-    if (!processed) {
-      const t1 = Date.now();
-      const toggled = await handleToggle(client, message);
-      if (toggled) {
-        logAction('Comando alternar executado', message.sender, message.chat, t1);
-        processed = true;
-      }
-    }
-
-    /* ---------- RENOMEAR STICKER ---------- */
-    if (!processed) {
-      const t2 = Date.now();
-      const renamed = await handleRenameSticker(client, message);
-      if (renamed) {
-        logAction('Comando renomear executado', message.sender, message.chat, t2);
-        processed = true;
-      }
-    }
-
-    /* ---------- DOWNLOAD REDE SOCIAL ---------- */
-    if (!processed) {
-      const t3 = Date.now();
-      const socialProcessed = await handleSocialMediaDownload({
-        client,
-        message,
-        sender: message.sender.id,
-        groupId: message.chatId
-      });
-      if (socialProcessed) {
-        logAction('Download de mídia social executado', message.sender, message.chat, t3);
-        processed = true;
-      }
-    }
-
-    /* ---------- FIG (resposta a mídia) ---------- */
-    if (!processed && body === 'fig') {
-      const t4 = Date.now();
-      if (!message.quotedMsg) {
-        await client.reply(
-          message.chatId,
-          '❕ Responda uma imagem, vídeo ou GIF com *fig* para virar sticker.',
-          message.id
-        );
-        logAction('Tentativa de fig sem mídia respondida', message.sender, message.chat, t4);
-        processed = true;
-      } else {
-        const quoted = message.quotedMsg;
-        switch (quoted.type) {
-          case 'image':
-            await processImage(client, quoted);
-            logAction('Sticker criado (imagem via fig)', message.sender, message.chat, t4);
-            processed = true;
-            break;
-          case 'video':
-            await processVideo(client, quoted);
-            logAction('Sticker animado criado (vídeo via fig)', message.sender, message.chat, t4);
-            processed = true;
-            break;
-          case 'document':
-            await processDocument(client, quoted);
-            logAction('Sticker criado (documento via fig)', message.sender, message.chat, t4);
-            processed = true;
-            break;
-          default:
-            await client.reply(
-              message.chatId,
-              '❕ A mensagem respondida não é uma mídia válida.',
-              message.id
-            );
-            logAction('Tentativa de fig com mídia inválida', message.sender, message.chat, t4);
-            processed = true;
-        }
-      }
-    }
-    /* ---------- EMOJI → STICKER ---------- */
-    if (!processed) {
-      const t5 = Date.now();
-      const emojiSent = await handleEmoji(client, message);
-      if (emojiSent) {
-        logAction('Sticker de emoji criado', message.sender, message.chat, t5);
-        processed = true;
-      }
-    }
-
-    /* ---------- MÍDIA DIRETA ---------- */
-    if (!processed) {
-      const t6 = Date.now();
-      switch (message.type) {
-        case 'image':
-          await processImage(client, message);
-          logAction('Sticker criado (imagem direta)', message.sender, message.chat, t6);
-          processed = true;
-          break;
-        case 'video':
-          await processVideo(client, message);
-          logAction('Sticker animado criado (vídeo direto)', message.sender, message.chat, t6);
-          processed = true;
-          break;
-        case 'document':
-          await processDocument(client, message);
-          logAction('Sticker criado (documento direto)', message.sender, message.chat, t6);
-          processed = true;
-          break;
-      }
-    }
-  } catch (error) {
-    console.error('Erro:', error.message);
-  }
-});
-
-    client.onAnyMessage(async (message) => {
-        if (message.isGroupMsg && message.type === 'video' && message.isGif) {
-            await processVideo(client, message);
-        }
-    });
 }
 
-async function sendHelp(client, chatId, messageId) {
-    const helpText = `🤖 *SordBOT FE – Central de Ajuda*
+/* ---------- Inicialização ---------- */
+async function start() {
+  const { version } = await fetchLatestBaileysVersion();
+  const { state, saveCreds } = await useMultiFileAuthState('./sessão');
 
-*Como usar:*
-• 📷 Envie uma *imagem* → vira sticker
-• 🎥 Envie *vídeo/GIF* (até 10 s) → sticker animado
-• 📁 Envie *arquivo de imagem* → sticker
-• ⬇️ Envie link de *Twitter, Instagram, TikTok ou Pinterest* → baixa mídia
+  const sock = makeWASocket({
+    version,
+    logger,
+    auth: state,
+    browser: ['SordBOT-FE', 'Chrome', '1.0.0'],
+    markOnlineOnConnect: false,
+  });
 
-*Comandos:*
+  let msgCount = 0;
+
+  async function cleanCache() {
+    console.log('🧹 200 msgs – limpando caches...');
+    msgCount = 0;
+    console.log('✅ Cache limpo (simulado)');
+  }
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      const qrcode = require('qrcode-terminal');
+      qrcode.generate(qr, { small: true });
+    }
+
+    if (connection === 'close') {
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Conexão fechada. Reconectando...', shouldReconnect);
+      if (shouldReconnect) start();
+    } else if (connection === 'open') {
+      console.log('🤖 SordBOT FE conectado!');
+    }
+  });
+
+  /* ---------- Handler de mensagens ---------- */
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const msg of messages) {
+      if (!msg.message) continue;
+      const isGroup = msg.key.remoteJid.endsWith('@g.us');
+      if (!isGroup) continue;
+
+      msgCount++;
+      if (msgCount >= 200) await cleanCache();
+
+      const safeMessage = {
+        ...msg,
+        message: msg.message || {},
+        key: msg.key || {},
+        pushName: msg.pushName || 'Desconhecido',
+      };
+
+      const body = safeMessage.message.conversation || safeMessage.message.extendedTextMessage?.text || '';
+      const lower = body.trim().toLowerCase();
+      let processed = false;
+
+      /* ---------- AJUDA ---------- */
+      if (lower === '!ajuda' || lower === 'ajuda') {
+        const t0 = Date.now();
+        await sendHelp(sock, safeMessage.key.remoteJid, { quoted: safeMessage });
+        logAction('Comando ajuda executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t0);
+        processed = true;
+      }
+
+      /* ---------- ALTERNAR ---------- */
+      if (!processed) {
+        const t1 = Date.now();
+        const toggled = await handleToggle(sock, safeMessage);
+        if (toggled) {
+          logAction('Comando alternar executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t1);
+          processed = true;
+        }
+      }
+
+      /* ---------- RENOMEAR ---------- */
+      if (!processed) {
+        const t2 = Date.now();
+        const renamed = await handleRenameSticker(sock, safeMessage);
+        if (renamed) {
+          logAction('Comando renomear executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t2);
+          processed = true;
+        }
+      }
+
+      /* ---------- DOWNLOAD REDE SOCIAL ---------- */
+      if (!processed) {
+        const t3 = Date.now();
+        const socialProcessed = await handleSocialMediaDownload(sock, safeMessage);
+        if (socialProcessed) {
+          logAction('Download de mídia social executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t3);
+          processed = true;
+        }
+      }
+
+      /* ---------- FIG ---------- */
+      if (!processed && lower === 'fig') {
+        const t4 = Date.now();
+        const quoted = safeMessage.message.extendedTextMessage?.contextInfo?.quotedMessage;
+        if (!quoted) {
+          await sock.sendMessage(safeMessage.key.remoteJid, {
+            text: '❕ Responda uma imagem, vídeo ou GIF com *fig* para virar sticker.',
+          }, { quoted: safeMessage });
+          logAction('Tentativa de fig sem mídia respondida', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+          processed = true;
+        } else {
+          const type = Object.keys(quoted)[0];
+          switch (type) {
+            case 'imageMessage':
+              await processImage(sock, quoted.imageMessage, safeMessage);
+              logAction('Sticker criado (imagem via fig)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+              processed = true;
+              break;
+            case 'videoMessage':
+              await processVideo(sock, quoted.videoMessage, safeMessage);
+              logAction('Sticker animado criado (vídeo via fig)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+              processed = true;
+              break;
+            default:
+              await sock.sendMessage(safeMessage.key.remoteJid, {
+                text: '❕ A mensagem respondida não é uma mídia válida.',
+              }, { quoted: safeMessage });
+              logAction('Tentativa de fig com mídia inválida', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+              processed = true;
+          }
+        }
+      }
+
+      /* ---------- EMOJI ---------- */
+      if (!processed) {
+        const t5 = Date.now();
+        const emojiSent = await handleEmoji(sock, safeMessage);
+        if (emojiSent) {
+          logAction('Sticker de emoji criado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t5);
+          processed = true;
+        }
+      }
+
+      /* ---------- MÍDIA DIRETA ---------- */
+      if (!processed) {
+        const t6 = Date.now();
+        const type = Object.keys(safeMessage.message)[0];
+        switch (type) {
+          case 'imageMessage':
+            await processImage(sock, safeMessage.message.imageMessage, safeMessage);
+            logAction('Sticker criado (imagem direta)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t6);
+            processed = true;
+            break;
+          case 'videoMessage':
+            await processVideo(sock, safeMessage.message.videoMessage, safeMessage);
+            logAction('Sticker animado criado (vídeo direto)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t6);
+            processed = true;
+            break;
+        }
+      }
+    }
+  });
+}
+
+/* ---------- Ajuda ---------- */
+async function sendHelp(sock, jid, quote) {
+  const text = `🤖 *SordBOT FE – Central de Ajuda*
+
+*Como usar*
+• 📷 Envie uma imagem → vira sticker
+• 🎥 Envie vídeo/GIF (até 10 s) → sticker animado
+• ⬇️ Envie link de Twitter, Instagram, TikTok ou Pinterest → baixa mídia
+Comandos:
 • \`ajuda\` → esta mensagem
-• \`alternar\` → liga/desliga *stretch*
-• \`fig\` → responda mídia com *fig* para virar sticker
+• \`alternar\` → liga/desliga stretch
+• \`fig\` → responda mídia com fig para virar sticker
 • \`renomear "nome" "autor"\` → renomeia os stickers
-
-*Extras:*
+Extras:
 • Cache limpo a cada 200 mensagens
 • Só funciona em grupos`;
-
-    await client.reply(chatId, helpText, messageId);
+await sock.sendMessage(jid, { text }, quote);
 }
+/* ---------- Start ---------- */
+start().catch(console.error);

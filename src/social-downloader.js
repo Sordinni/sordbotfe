@@ -1,38 +1,25 @@
-// social-downloader.js - VERSÃO COMPLETA E FUNCIONAL
-
+// social-downloader.js – VERSÃO COMPLETA E PROTEGIDA PARA BAILEYS
 const { instagramGetUrl } = require("instagram-url-direct");
 const { pinterest } = require('btch-downloader');
-const download = require('yt-stream')
+const download = require('yt-stream');
 const { tikdown, twitterdown } = require("cyber-media-downloader");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-// Funções auxiliares
+// ---------- Funções auxiliares ----------
 function createTempFilePath(url) {
-  // Segurança: garante que é string
-  if (!url || typeof url !== 'string') {
-    console.warn('createTempFilePath: url inválida →', url);
-    url = 'https://example.com/fallback.tmp';
-  }
-
+  if (!url || typeof url !== 'string') url = 'https://example.com/fallback.tmp';
   const tempDir = path.join(__dirname, 'temp');
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
   let ext = 'tmp';
-  try {
-    ext = path.extname(new URL(url).pathname).slice(1) || 'tmp';
-  } catch {
-    // ignora erro de URL inválida
-  }
-
+  try { ext = path.extname(new URL(url).pathname).slice(1) || 'tmp'; } catch {}
   if (ext === 'tmp') {
     if (url.includes('.mp4') || url.includes('video')) ext = 'mp4';
     else if (url.includes('.jpg') || url.includes('.jpeg')) ext = 'jpg';
     else if (url.includes('.png')) ext = 'png';
     else if (url.includes('.gif')) ext = 'gif';
   }
-
   const stamp = Date.now() + '_' + Math.random().toString(36).slice(-6);
   return path.join(tempDir, `media_${stamp}.${ext}`);
 }
@@ -49,7 +36,6 @@ async function downloadFile(url, filePath) {
         Referer: 'https://www.youtube.com/'
       }
     });
-
     return new Promise((resolve, reject) => {
       const writer = fs.createWriteStream(filePath);
       response.data.pipe(writer);
@@ -57,7 +43,6 @@ async function downloadFile(url, filePath) {
       writer.on('error', reject);
     });
   } catch (error) {
-    console.error('❌ Erro no download:', error.message);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     throw new Error(`Falha ao baixar ${url.substring(0, 50)}...`);
   }
@@ -66,11 +51,7 @@ async function downloadFile(url, filePath) {
 function cleanupTempFiles(filePaths) {
   filePaths.forEach(filePath => {
     if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (e) {
-        console.error('Erro ao remover temp:', e);
-      }
+      try { fs.unlinkSync(filePath); } catch (e) { console.error('Erro ao remover temp:', e); }
     }
   });
 }
@@ -99,9 +80,9 @@ async function processTikTokMedia(tiktokData) {
   const data = tiktokData.data;
   const medias = [];
   if (data.images?.length) {
-    data.images.forEach(u => medias.push({ url: u, type: 'image', caption: data.title || '' }));
+    data.images.forEach(u => medias.push({ url: u, type: 'image', caption: '' }));
   } else if (data.video) {
-    medias.push({ url: data.video, type: 'video', caption: data.title || '' });
+    medias.push({ url: data.video, type: 'video', caption: '' });
   }
   if (!medias.length) throw new Error('Nenhuma mídia no TikTok');
   return medias;
@@ -117,71 +98,75 @@ async function processTwitterMedia(mediaData) {
 
 async function processYouTubeMedia(url, quality = '720p') {
   try {
-    const stream = download(url, {
-      quality: quality, // ex: '720p', '480p', etc
-      type: 'video',
-    });
-
-    // Gera nome único para o arquivo
+    const stream = download(url, { quality, type: 'video' });
     const tempDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     const filePath = path.join(tempDir, `yt_${Date.now()}.mp4`);
-
-    // Pipe direto para arquivo
     await new Promise((resolve, reject) => {
       const write = fs.createWriteStream(filePath);
       stream.pipe(write);
       write.on('finish', resolve);
       write.on('error', reject);
     });
-    // Monta caption
     const caption = `YouTube\n🔗 ${url}`;
-
-    // Retorna no mesmo formato esperado
     return [{ url: filePath, type: 'video', caption, localFile: true }];
   } catch (e) {
-    console.error('[DEBUG] Catch em processYouTubeMedia:', e);
     throw new Error('Não consegui baixar este vídeo do YouTube.');
   }
 }
 
-// Download e envio da mídia
-async function downloadAndSendMedia(client, originalMessage, media, platform) {
-  // Extrai URL string com segurança
+// ---------- Envio de mídia ----------
+async function downloadAndSendMedia(sock, message, media, fullMsg = message) {
   const url = typeof media.url === 'string' ? media.url : media.url?.url;
-  if (!url || typeof url !== 'string') {
-    throw new Error('URL inválida para download.');
+  if (!url || typeof url !== 'string') throw new Error('URL inválida para download.');
+
+  const filePath = media.localFile ? url : createTempFilePath(url);
+  if (!media.localFile) await downloadFile(url, filePath);
+
+  const caption = media.caption || '';
+
+  if (media.type === 'video') {
+    await sock.sendMessage(message.key.remoteJid, {
+      video: fs.readFileSync(filePath),
+      caption},
+      {quoted: fullMsg}
+    );
+  } else if (media.type === 'image') {
+    await sock.sendMessage(message.key.remoteJid, {
+      image: fs.readFileSync(filePath),
+      caption},
+      {quoted: fullMsg}
+    );
+  } else if (media.type === 'audio') {
+    await sock.sendMessage(message.key.remoteJid, {
+      audio: fs.readFileSync(filePath),
+      ptt: true},
+      {quoted: fullMsg}
+    );
+  } else {
+    await sock.sendMessage(message.key.remoteJid, {
+      document: fs.readFileSync(filePath),
+      fileName: 'arquivo.bin',
+      caption},
+      {quoted: fullMsg}
+    );
   }
 
-  const filePath = createTempFilePath(url);
-  try {
-    await downloadFile(url, filePath);
-    const caption = media.caption || '';
-
-    if (media.type === 'video') {
-      await client.sendFile(originalMessage.chatId, filePath, 'video.mp4', caption, originalMessage.id);
-    } else if (media.type === 'image') {
-      await client.sendFile(originalMessage.chatId, filePath, 'image.jpg', caption, originalMessage.id);
-    } else if (media.type === 'audio') {
-      await client.sendPtt(originalMessage.chatId, filePath, originalMessage.id);
-    } else {
-      await client.sendFile(originalMessage.chatId, filePath, 'arquivo.bin', caption, originalMessage.id);
-    }
-
-    return { filePath, type: media.type };
-  } catch (err) {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    throw err;
-  }
+  return filePath;
 }
 
-// Handler de download de mídias sociais
-async function handleSocialMediaDownload({ client, message, sender, groupId }) {
+// ---------- Handler principal ----------
+async function handleSocialMediaDownload(sock, message) {
+  if (!message?.key?.remoteJid || !message?.message) return false;
+
   const tempFiles = [];
   let platform = 'Mídia Social';
 
   try {
-    const urlMatch = message.body.trim().match(/https?:\/\/[^\s]+/);
+    const text = message.message.conversation ||
+                 message.message.extendedTextMessage?.text ||
+                 '';
+    const urlMatch = text.trim().match(/https?:\/\/[^\s]+/);
     if (!urlMatch) return false;
     const url = urlMatch[0];
 
@@ -202,35 +187,43 @@ async function handleSocialMediaDownload({ client, message, sender, groupId }) {
       platform = 'YouTube';
       mediaProcessor = () => processYouTubeMedia(url, '720');
     } else {
-      return false; // não é suportado
+      return false;
     }
 
-    await client.react(message.id, '⌛');
+    await sock.sendMessage(message.key.remoteJid, { react: { text: '⌛', key: message.key } });
 
     const medias = await mediaProcessor();
     if (!medias || medias.length === 0) {
-      await client.reply(message.chatId, `❌ Nenhuma mídia encontrada no link do ${platform}.`, message.id);
-      await client.react(message.id, '🔴');
+      await sock.sendMessage(message.key.remoteJid, {
+        text: `❌ Nenhuma mídia encontrada no link do ${platform}.`,
+        quoted: message
+      });
+      await sock.sendMessage(message.key.remoteJid, { react: { text: '🔴', key: message.key } });
       return true;
     }
 
-    // Envia uma a uma
     for (const media of medias) {
       try {
-        const res = await downloadAndSendMedia(client, message, media, platform);
-        if (res?.filePath) tempFiles.push(res.filePath);
+        const filePath = await downloadAndSendMedia(sock, message, media);
+        if (filePath && !media.localFile) tempFiles.push(filePath);
       } catch (err) {
         console.error(`❌ Falha ao enviar mídia de ${platform}:`, err);
-        await client.reply(message.chatId, `⚠️ Erro em uma das mídias: ${err.message}`, message.id);
+        await sock.sendMessage(message.key.remoteJid, {
+          text: `⚠️ Erro em uma das mídias: ${err.message}`,
+          quoted: message
+        });
       }
     }
 
-    await client.react(message.id, '✅');
+    await sock.sendMessage(message.key.remoteJid, { react: { text: '✅', key: message.key } });
     return true;
   } catch (error) {
     console.error(`❌ Erro ao processar ${platform}:`, error);
-    await client.reply(message.chatId, `❌ ${error.message}`, message.id);
-    await client.react(message.id, '🔴');
+    await sock.sendMessage(message.key.remoteJid, {
+      text: `❌ ${error.message}`,
+      quoted: message
+    });
+    await sock.sendMessage(message.key.remoteJid, { react: { text: '🔴', key: message.key } });
     return true;
   } finally {
     if (tempFiles.length) setTimeout(() => cleanupTempFiles(tempFiles), 5000);
