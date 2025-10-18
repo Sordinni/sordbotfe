@@ -15,12 +15,6 @@ function lockKey(jid, user) {
   return `${jid}_${user}`;
 }
 
-/**
- * Converte vídeo/GIF recebido pelo Baileys em sticker animado
- * @param {Wasocket} sock  – instância Baileys
- * @param {videoMessage|gifMessage} mediaObj – mensagem de mídia
- * @param {WAMessage} fullMsg – mensagem completa (para quoted, reações, etc.)
- */
 async function processVideo(sock, mediaObj, fullMsg) {
   const jid   = fullMsg.key.remoteJid;
   const user  = fullMsg.participant || fullMsg.key.participant;
@@ -50,34 +44,35 @@ async function processVideo(sock, mediaObj, fullMsg) {
     const tempVideoPath = path.join(__dirname, 'temp', `${Date.now()}.mp4`);
     fs.writeFileSync(tempVideoPath, buffer);
 
-    /* comprime o vídeo usando ffmpeg */
-    const compressedVideoPath = path.join(__dirname, 'temp', `${Date.now()}_compressed.mp4`);
-    const ffmpeg = spawn('ffmpeg', [
+    /* corta o vídeo para a proporção 1:1 usando ffmpeg */
+    const croppedVideoPath = path.join(__dirname, 'temp', `${Date.now()}_cropped.mp4`);
+    const ffmpegCrop = spawn('ffmpeg', [
       '-i', tempVideoPath,
-      '-vcodec', 'libx264',
-      '-crf', '32', // taxa de compressão (maior valor = mais compressão)
+      '-filter:v', 'crop=in_w:in_w', // corta para proporção 1:1
+      '-c:v', 'libx264',
+      '-crf', '25', // taxa de compressão (maior valor = mais compressão)
       '-preset', 'veryfast',
       '-maxrate', '100k', // taxa máxima de bits
       '-bufsize', '200k', // tamanho do buffer
-      compressedVideoPath
+      croppedVideoPath
     ]);
 
-    ffmpeg.on('close', async (code) => {
+    ffmpegCrop.on('close', async (code) => {
       if (code !== 0) {
-        console.error('Erro ao comprimir vídeo usando ffmpeg');
+        console.error('Erro ao cortar vídeo usando ffmpeg');
         await sock.sendMessage(jid, {
-          text: '❌ Erro ao comprimir o vídeo.'
+          text: '❌ Erro ao cortar o vídeo.'
         }, { quoted: fullMsg });
         return;
       }
 
-      /* lê o vídeo comprimido */
-      const compressedBuffer = fs.readFileSync(compressedVideoPath);
+      /* lê o vídeo cortado */
+      const croppedBuffer = fs.readFileSync(croppedVideoPath);
 
       /* tenta gerar o webp em cada FPS do pool */
       for (const fps of FPS_POOL) {
         try {
-          const webp = await new Sticker(compressedBuffer, {
+          const webp = await new Sticker(croppedBuffer, {
             type: StickerTypes.FULL,
             pack,
             author,
@@ -105,7 +100,7 @@ async function processVideo(sock, mediaObj, fullMsg) {
       await sock.sendMessage(jid, { react: { text: '🥲', key: fullMsg.key } });
     });
 
-    ffmpeg.stderr.on('data', (data) => {
+    ffmpegCrop.stderr.on('data', (data) => {
       console.log(data.toString());
     });
   } catch (err) {
