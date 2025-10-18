@@ -20,6 +20,24 @@ async function stretchImage(buffer) {
   return canvas.toBuffer('image/jpeg');
 }
 
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+
+async function safeDownload(sock, msg, type, attempts = 3, delay = 300) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const buffer = await downloadMediaMessage(
+        { key: msg.key, message: { [type]: msg.message[type] } },
+        'buffer',
+        {},
+        { logger: sock.logger, reuploadRequest: sock.updateMediaMessage }
+      );
+      if (buffer && buffer.length) return buffer;
+    } catch (e) { /* ignore */ }
+    await new Promise(r => setTimeout(r, delay));
+  }
+  throw new Error('Mídia indisponível mesmo após retries');
+}
+
 async function createSticker(buffer, pack, author) {
   try {
     // Resize and convert to WebP
@@ -72,12 +90,7 @@ async function processImage(sock, mediaMsg, fullMsg) {
     const pack = meta.pack || 'figurinha por';
     const author = meta.author || 'So𝘳dBOT';
     /* baixa a imagem */
-    const buffer = await downloadMediaMessage(
-      { key: msgKey, message: { imageMessage: mediaMsg } },
-      'buffer',
-      {},
-      { logger: sock.logger }
-    );
+const buffer = await safeDownload(sock, fullMsg, 'imageMessage');
 
     /* stretch opcional */
     const finalBuffer = getUseStretch(user)
