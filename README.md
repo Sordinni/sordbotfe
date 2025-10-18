@@ -1,6 +1,6 @@
 # 🤖 SordBOT FE  
 **Bot de WhatsApp para criar figurinhas automáticas e baixar mídias sociais**  
-Feito com [@open-wa/wa-automate](https://github.com/open-wa/wa-automate-nodejs) e muito ❤️.
+Feito com [@whiskeysockets/baileys](https://github.com/adiwajshing/Baileys) e muito ❤️.
 
 ---
 
@@ -17,4 +17,4 @@ Feito com [@open-wa/wa-automate](https://github.com/open-wa/wa-automate-nodejs) 
 | 🧹 **Auto-Limpeza** | Limpa cache a cada 200 mensagens | Automático |
 | 🆘 **Ajuda** | Lista todos os comandos | `ajuda` ou `!ajuda` |
 
-> ⚠️ **Só funciona em grupos!**
+&gt; ⚠️ **Só funciona em grupos!**
