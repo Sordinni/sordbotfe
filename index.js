@@ -97,7 +97,10 @@ async function start() {
         const lower = body.trim().toLowerCase();
         let processed = false;
 
-        const userId = msg.key.remoteJid.replace('@lid', '@s.whatsapp.net');
+        const extractLid = (jid, alt) => (jid?.endsWith('@lid') ? jid : alt) || jid;
+        const userLid = extractLid(msg.key.remoteJid, msg.key.remoteJidAlt);
+        const senderLid = extractLid(msg.key.participant, msg.key.participantAlt);
+        const userId = senderLid || userLid;
 
         const isAvisos = await isUserInAvisosGroup(sock, userId);
         if (!isAvisos) {
@@ -105,6 +108,8 @@ async function start() {
           await sock.updateBlockStatus(userId, 'block');
           return;
         }
+
+        const destUser = userId.replace('@lid', '@s.whatsapp.net');
 
         const helpAliases = [
           '!ajuda', 'ajuda', '!help', 'help', '!comandos', 'comandos',
@@ -115,7 +120,7 @@ async function start() {
 
         if (helpAliases.includes(lower)) {
           await sleep(r(1000, 3000));
-          await sendHelp(sock, userId, { quoted: safeMessage });
+          await sendHelp(sock, destUser, { quoted: safeMessage });
           logAction('Comando ajuda executado', safeMessage.pushName);
           processed = true;
         }
@@ -157,7 +162,7 @@ async function start() {
           if (!quoted) {
             await sleep(r(1000, 3000));
             await sock.sendMessage(
-              userId,
+              destUser,
               { text: '❕ Responda uma imagem, vídeo ou GIF com *fig* para virar sticker.' },
               { quoted: safeMessage }
             );
@@ -175,7 +180,7 @@ async function start() {
           if (limit.blockedNow) {
             await sleep(r(1000, 3000));
             await sock.sendMessage(
-              userId,
+              destUser,
               { text: `⏳ Você atingiu 5 figurinhas. Aguarde 6 minutos.` },
               { quoted: safeMessage }
             );
@@ -198,7 +203,7 @@ async function start() {
             default:
               await sleep(r(1000, 3000));
               await sock.sendMessage(
-                userId,
+                destUser,
                 { text: '❕ A mensagem respondida não é uma mídia válida.' },
                 { quoted: safeMessage }
               );
@@ -219,7 +224,7 @@ async function start() {
             `📅 Primeiro uso: ${new Date(st.firstSeen).toLocaleString('pt-BR')}`;
 
           await sleep(r(1000, 3000));
-          await sock.sendMessage(userId, { text: texto }, { quoted: safeMessage });
+          await sock.sendMessage(destUser, { text: texto }, { quoted: safeMessage });
           processed = true;
         }
 
@@ -248,9 +253,9 @@ async function start() {
             `💡 Dúvidas ou alguma sugestão? Fale com o contato abaixo.`;
 
           await sleep(r(1000, 3000));
-          await sock.sendMessage(userId, { text: texto }, { quoted: safeMessage });
+          await sock.sendMessage(destUser, { text: texto }, { quoted: safeMessage });
           await sleep(r(1000, 3000));
-          await sock.sendMessage(userId, {
+          await sock.sendMessage(destUser, {
             contacts: {
               displayName: 'Juan Sordinni',
               contacts: [{ vcard }],
@@ -283,7 +288,7 @@ async function start() {
               if (!limit.allowed) {
                 const { min, sec } = limit.remaining;
                 await sock.sendMessage(
-                  userId,
+                  destUser,
                   { text: `⏳ Limite atingido! Aguarde *${min}* minutos e *${sec}* segundos.` },
                   { quoted: safeMessage }
                 );
@@ -294,7 +299,7 @@ async function start() {
               if (limit.blockedNow) {
                 await sleep(r(1000, 3000));
                 await sock.sendMessage(
-                  userId,
+                  destUser,
                   { text: `⏳ Você atingiu 5 figurinhas. Aguarde 6 minutos.` },
                   { quoted: safeMessage }
                 );
@@ -310,7 +315,7 @@ async function start() {
               if (!limit.allowed) {
                 const { min, sec } = limit.remaining;
                 await sock.sendMessage(
-                  userId,
+                  destUser,
                   { text: `⏳ Limite atingido! Aguarde *${min}* minutos e *${sec}* segundos.` },
                   { quoted: safeMessage }
                 );
@@ -321,7 +326,7 @@ async function start() {
               if (limit.blockedNow) {
                 await sleep(r(1000, 3000));
                 await sock.sendMessage(
-                  userId,
+                  destUser,
                   { text: `⏳ Você atingiu 5 figurinhas. Aguarde 6 minutos.` },
                   { quoted: safeMessage }
                 );
