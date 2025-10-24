@@ -94,13 +94,11 @@ async function start() {
         const userJid = msg.key.participant || msg.key.remoteJid;
         const lid = msg.key.participantAlt || msg.key.remoteJidAlt || null;
 
-        const finalJid = lid || userJid
-
-        const isAvisos = await isUserInAvisosGroup(sock, finalJid);
+const isAvisos = await isUserInAvisosGroup(sock, userJid);
 
         if (!isAvisos) {
           await sleep(r(1000, 3000));
-          await sock.updateBlockStatus(finalJid, 'block');
+          await sock.updateBlockStatus(userJid, 'block');
           return;
         }
 

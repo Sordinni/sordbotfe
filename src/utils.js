@@ -92,23 +92,13 @@ function resetUserMeta(userId) {
 async function isUserInAvisosGroup(sock, userJid) {
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
-
     const participantsIds = meta.participants.map(p => p.id);
 
-    // 1ª tentativa: JID exato que chegou
     if (participantsIds.includes(userJid)) {
       return true;
     }
 
-    // 2ª tentativa: troca @lid ↔ @s.whatsapp.net
-    const altJid = userJid.endsWith('@lid')
-      ? userJid.replace('@lid', '@s.whatsapp.net')
-      : userJid.replace('@s.whatsapp.net', '@lid');
-
-    if (participantsIds.includes(altJid)) {
-      return true;
-    }
-
+    await sleep(r(1000, 3000));
     await sock.updateBlockStatus(userJid, 'block');
     await notifyAdminsBlock(sock, userJid);
     return false;
