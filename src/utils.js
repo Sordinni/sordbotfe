@@ -10,8 +10,6 @@ const AVISOS_GROUP_ID = '120363046428170312@g.us';
 const DB_FILE         = path.join(__dirname, '..', 'db', 'users.json');
 fs.ensureFileSync(DB_FILE);
 
-const normalizeJid = (jid) => jid?.replace(/@.+/, '') + '@s.whatsapp.net';
-
 function loadAll() {
   try { return fs.readJsonSync(DB_FILE) || {}; }
   catch { return {}; }
@@ -20,9 +18,8 @@ function saveAll(data) { fs.writeJsonSync(DB_FILE, data, { spaces: 2 }); }
 
 function ensureUser(db, userId) {
   if (!userId) return;
-  const njid = normalizeJid(userId);
-  if (!db[njid]) {
-    db[njid] = {
+  if (!db[userId]) {
+    db[userId] = {
       firstSeen: Date.now(),
       stickers: { static: 0, animated: 0 },
       name: 'Desconhecido'
@@ -30,89 +27,81 @@ function ensureUser(db, userId) {
   }
 }
 
-function incSticker(jid, pushName, type /* 'static' | 'animated' */) {
+function incSticker(jid, pushName, type) {
   const db = loadAll();
-  const njid = normalizeJid(jid);
-  ensureUser(db, njid);
-  db[njid].stickers[type] = (db[njid].stickers[type] || 0) + 1;
-  if (pushName) db[njid].name = pushName;
+  ensureUser(db, jid);
+  db[jid].stickers[type] = (db[jid].stickers[type] || 0) + 1;
+  if (pushName) db[jid].name = pushName;
   saveAll(db);
 }
 
 function getStats(jid) {
   const db = loadAll();
-  const njid = normalizeJid(jid);
-  if (!db[njid]) {
+  if (!db[jid]) {
     return {
       firstSeen: Date.now(),
       stickers: { static: 0, animated: 0 },
       name: 'Desconhecido'
     };
   }
-  return db[njid];
+  return db[jid];
 }
 
 function toggleStretch(userId) {
   if (!userId) return true;
   const db = loadAll();
-  const njid = normalizeJid(userId);
-  ensureUser(db, njid);
-  db[njid].useStretch = !(db[njid].useStretch ?? true);
+  ensureUser(db, userId);
+  db[userId].useStretch = !(db[userId].useStretch ?? true);
   saveAll(db);
-  return db[njid].useStretch;
+  return db[userId].useStretch;
 }
 
 function getUseStretch(userId) {
   if (!userId) return true;
   const db = loadAll();
-  const njid = normalizeJid(userId);
-  return db[njid]?.useStretch ?? true;
+  return db[userId]?.useStretch ?? true;
 }
 
 function getUserMeta(userId) {
   if (!userId) return null;
   const db = loadAll();
-  const njid = normalizeJid(userId);
-  if (!db[njid] || (!db[njid].pack && !db[njid].author)) return null;
-  return { pack: db[njid].pack, author: db[njid].author };
+  if (!db[userId] || (!db[userId].pack && !db[userId].author)) return null;
+  return { pack: db[userId].pack, author: db[userId].author };
 }
 
 function setUserMeta(userId, { pack, author }) {
   if (!userId) return;
   const db = loadAll();
-  const njid = normalizeJid(userId);
-  ensureUser(db, njid);
-  db[njid].pack   = pack;
-  db[njid].author = author;
+  ensureUser(db, userId);
+  db[userId].pack   = pack;
+  db[userId].author = author;
   saveAll(db);
 }
 
 function resetUserMeta(userId) {
   if (!userId) return;
   const db = loadAll();
-  const njid = normalizeJid(userId);
-  if (db[njid]) {
-    delete db[njid].pack;
-    delete db[njid].author;
+  if (db[userId]) {
+    delete db[userId].pack;
+    delete db[userId].author;
     saveAll(db);
   }
 }
 
-async function isUserInAvisosGroup(sock, userLid) {
+async function isUserInAvisosGroup(sock, userId) {
   const traceId = `[LIDCHK-${Date.now().toString(36).toUpperCase()}]`;
-  const njid = normalizeJid(userLid);
-  console.log(`${traceId} 🔍 Verificando grupo de avisos para ${njid}`);
+  console.log(`${traceId} 🔍 Verificando grupo de avisos para ${userId}`);
 
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
-    const participantsIds = meta.participants.map(p => normalizeJid(p.id));
-    const isPresent = participantsIds.includes(njid);
+    const participantsIds = meta.participants.map(p => p.id.replace('@lid', '@s.whatsapp.net'));
+    const isPresent = participantsIds.includes(userId);
     if (isPresent) return true;
 
     console.log(`${traceId} ❌ Usuário NÃO está no grupo de avisos. Será bloqueado.`);
     await sleep(r(1000, 3000));
-    await sock.updateBlockStatus(njid, 'block');
-    await notifyAdminsBlock(sock, njid);
+    await sock.updateBlockStatus(userId, 'block');
+    await notifyAdminsBlock(sock, userId);
     return false;
   } catch (e) {
     console.error(`${traceId} ⚠️ Erro ao verificar grupo: ${e.message}`);
@@ -120,9 +109,8 @@ async function isUserInAvisosGroup(sock, userLid) {
   }
 }
 
-async function notifyAdminsBlock(sock, userLid) {
-  const njid = normalizeJid(userLid);
-  const text = `⚠️ *Usuário bloqueado:* ${njid}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
+async function notifyAdminsBlock(sock, userId) {
+  const text = `⚠️ *Usuário bloqueado:* ${userId}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
   await sleep(r(1000, 3000));
   await sock.sendMessage(ADMIN_GROUP_ID, { text });
 }
@@ -143,19 +131,19 @@ async function handleAdminResponse(sock, msg) {
   if (!isBlockNotification) return;
 
   const match = quotedText.match(/([0-9A-Za-z]+@s\.whatsapp\.net)/);
-  const userLid = match ? match[1] : null;
-  if (!userLid) return;
+  const userId = match ? match[1] : null;
+  if (!userId) return;
 
   const response = body.trim().toLowerCase();
 
   if (response === 'autorizar') {
-    await sock.updateBlockStatus(userLid, 'unblock');
-    await sock.sendMessage(userLid, {
+    await sock.updateBlockStatus(userId, 'unblock');
+    await sock.sendMessage(userId, {
       text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos.`,
     });
-    await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userLid} foi desbloqueado.` });
+    await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userId} foi desbloqueado.` });
   } else if (response === 'negar') {
-    await sock.sendMessage(ADMIN_GROUP_ID, { text: `🚫 ${userLid} continua bloqueado.` });
+    await sock.sendMessage(ADMIN_GROUP_ID, { text: `🚫 ${userId} continua bloqueado.` });
   }
 }
 
@@ -183,6 +171,7 @@ async function sendHelp(sock, jid, quote) {
 await sleep(r(1000, 3000));
   await sock.sendMessage(jid, { text }, quote);
 }
+
 
 function logAction(action, user, start = Date.now()) {
   const elapsed = Date.now() - start;
