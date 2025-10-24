@@ -229,7 +229,7 @@ const isAvisos = await isUserInAvisosGroup(sock, userJid);
             'END:VCARD';
           const texto =
             `🔴 *So𝘳dBOT Rouge*\n` +
-            `🔖 *Versão:* \´d2410h1730\´ \n\n` +
+            `🔖 *Versão:* \´d2410h1805\´ \n\n` +
             `💰 *Gastos*\n` +
             `- Número (Rouge): €18,99/mês\n` +
             `- Número (Noir): €18,99/mês\n` +

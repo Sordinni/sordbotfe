@@ -153,7 +153,7 @@ https://vm.tiktok.com/ZMNxxxxx/
 
 ## Roadmap / changelog
 
-- **v1.0.0** – Lançamento
+- **d2410h1805** – Lançamento
   - stickers estáticos/animados
   - downloads Instagram, TikTok, Twitter, YouTube, Pinterest
   - rate-limit 5/6 min
