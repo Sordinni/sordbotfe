@@ -146,19 +146,19 @@ async function handleAdminResponse(sock, msg) {
 
   const response = body.trim().toLowerCase();
 
-  if (response === 'autorizar') {
-    await sock.updateBlockStatus(userLid, 'unblock');
+if (response === 'autorizar') {
+  await sock.updateBlockStatus(userLid, 'unblock');
 
-    /* ----------  CONVERTE LID → @s.whatsapp.net  ---------- */
-    const contact = sock.contacts?.[userLid] || {};
-    const userJid = contact.phoneNumber || userLid.replace('@lid', '@s.whatsapp.net');
+  /* ----------  CONVERTE LID → @s.whatsapp.net  ---------- */
+  const contact = sock.contacts?.[userLid] || {};
+  const userJid = contact.phoneNumber || userLid.replace('@lid', '@s.whatsapp.net');
 
-    await sock.sendMessage(userJid, {
-      text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos. https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q`,
-    });
+  await sock.sendMessage(userJid, {
+    text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos. https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q`,
+  });
 
-    await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userLid} foi desbloqueado.` });
-  } else if (response === 'negar') {
+  await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userLid} foi desbloqueado.` });
+} else if (response === 'negar') {
     await sock.sendMessage(ADMIN_GROUP_ID, { text: `🚫 ${userLid} continua bloqueado.` });
   }
 }
