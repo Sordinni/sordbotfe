@@ -88,20 +88,20 @@ function resetUserMeta(userId) {
   }
 }
 
-async function isUserInAvisosGroup(sock, userId) {
+async function isUserInAvisosGroup(sock, userLid) {
   const traceId = `[LIDCHK-${Date.now().toString(36).toUpperCase()}]`;
-  console.log(`${traceId} 🔍 Verificando grupo de avisos para ${userId}`);
+  console.log(`${traceId} 🔍 Verificando grupo de avisos para ${userLid}`);
 
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
-    const participantsIds = meta.participants.map(p => p.id.replace('@lid', '@s.whatsapp.net'));
-    const isPresent = participantsIds.includes(userId);
+    const participantsIds = meta.participants.map(p => p.id);
+    const isPresent = participantsIds.includes(userLid);
     if (isPresent) return true;
 
     console.log(`${traceId} ❌ Usuário NÃO está no grupo de avisos. Será bloqueado.`);
     await sleep(r(1000, 3000));
-    await sock.updateBlockStatus(userId, 'block');
-    await notifyAdminsBlock(sock, userId);
+    await sock.updateBlockStatus(userLid, 'block');
+    await notifyAdminsBlock(sock, userLid);
     return false;
   } catch (e) {
     console.error(`${traceId} ⚠️ Erro ao verificar grupo: ${e.message}`);
@@ -109,8 +109,8 @@ async function isUserInAvisosGroup(sock, userId) {
   }
 }
 
-async function notifyAdminsBlock(sock, userId) {
-  const text = `⚠️ *Usuário bloqueado:* ${userId}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
+async function notifyAdminsBlock(sock, userLid) {
+  const text = `⚠️ *Usuário bloqueado:* ${userLid}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
   await sleep(r(1000, 3000));
   await sock.sendMessage(ADMIN_GROUP_ID, { text });
 }
@@ -130,20 +130,21 @@ async function handleAdminResponse(sock, msg) {
 
   if (!isBlockNotification) return;
 
-  const match = quotedText.match(/([0-9A-Za-z]+@s\.whatsapp\.net)/);
-  const userId = match ? match[1] : null;
-  if (!userId) return;
+  const match = quotedText.match(/([0-9A-Za-z]+@lid)/);
+  const userLid = match ? match[1] : null;
+  if (!userLid) return;
 
   const response = body.trim().toLowerCase();
 
   if (response === 'autorizar') {
-    await sock.updateBlockStatus(userId, 'unblock');
-    await sock.sendMessage(userId, {
-      text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos.`,
+    await sock.updateBlockStatus(userLid, 'unblock');
+    const destUser = userLid.replace('@lid', '@s.whatsapp.net');
+    await sock.sendMessage(destUser, {
+      text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos. https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q`,
     });
-    await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userId} foi desbloqueado.` });
+    await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userLid} foi desbloqueado.` });
   } else if (response === 'negar') {
-    await sock.sendMessage(ADMIN_GROUP_ID, { text: `🚫 ${userId} continua bloqueado.` });
+    await sock.sendMessage(ADMIN_GROUP_ID, { text: `🚫 ${userLid} continua bloqueado.` });
   }
 }
 
