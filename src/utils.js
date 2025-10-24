@@ -88,7 +88,6 @@ function resetUserMeta(userId) {
   }
 }
 
-
 async function isUserInAvisosGroup(sock, userJid) {
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
@@ -98,13 +97,15 @@ async function isUserInAvisosGroup(sock, userJid) {
       return true;
     }
 
+    // Usuário NÃO está no grupo → bloqueia e notifica
     await sleep(r(1000, 3000));
     await sock.updateBlockStatus(userJid, 'block');
     await notifyAdminsBlock(sock, userJid);
     return false;
   } catch (e) {
-    console.error('[AVISOS] Erro ao buscar grupo de avisos:', e);
-    return false;
+    console.error('[AVISOS] Erro ao buscar grupo de avisos:', e.message);
+    // Grupo inacessível (403, etc.) → não bloqueia, libera passagem
+    return true;
   }
 }
 
