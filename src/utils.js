@@ -138,7 +138,6 @@ async function handleAdminResponse(sock, msg) {
 
   const quotedText = quoted.conversation || quoted.extendedTextMessage?.text || '';
   const isBlockNotification = quotedText.startsWith('⚠️ *Usuário bloqueado:*');
-
   if (!isBlockNotification) return;
 
   const match = quotedText.match(/([0-9A-Za-z]+@lid)/);
