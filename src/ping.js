@@ -1,6 +1,3 @@
-/**
- * !ping → responde com estatísticas rápidas do host
- */
 const os = require('os');
 
 function formatBytes(bytes) {
@@ -19,27 +16,26 @@ function cpuAvg() {
 }
 
 async function handlePing(sock, msg) {
+  const { startTime } = require('../index');
   const jid = msg.key.remoteJid;
   const t0  = Date.now();
 
   /* coleta tudo de uma vez */
   const [
-    arch, plat, release, type, version, machine, endian,
-    hostname, uptime, load, homedir, tmpdir, devNull
+    arch, plat, type, version, machine, uptime
   ] = [
-    os.arch(), os.platform(), os.release(), os.type(),
-    os.version(), os.machine(), os.endianness(),
-    os.hostname(), os.uptime(), os.loadavg(), os.homedir(),
-    os.tmpdir(), os.devNull
+    os.arch(), os.platform(), os.type(),
+    os.version(), os.machine(), os.uptime()
   ];
 
   const total = os.totalmem();
   const free  = os.freemem();
   const used  = total - free;
-  const cpus  = os.cpus().length;
-  const cores = os.availableParallelism();
-  const user  = os.userInfo();
-  const eol   = os.EOL === '\r\n' ? 'CRLF (Windows)' : 'LF (Unix)';
+
+  /* tempo do bot em hh:mm */
+  const ms   = Date.now() - startTime.getTime();
+  const hrs  = Math.floor(ms / 3_600_000);
+  const mins = Math.floor((ms % 3_600_000) / 60_000);
 
   const texto = `
 🏓 *Pong!* – \`${Date.now() - t0} ms\`
@@ -47,34 +43,20 @@ async function handlePing(sock, msg) {
 📟 *Sistema*
 Arch: \`${arch}\`
 Platform: \`${plat}\`
-Release: \`${release}\`
 Type: \`${type}\`
 Version: \`${version}\`
 Machine: \`${machine}\`
-Endianness: \`${endian}\`
-Hostname: \`${hostname}\`
-EOL: \`${eol}\`
 
 🧠 *CPU*
-Cores físicos: \`${cpus}\`
-Paralelismo disponível: \`${cores}\`
 Uso médio: \`${cpuAvg()} %\`
-LoadAvg (1/5/15 min): \`${load.map(l => l.toFixed(2)).join(' / ')}\`
 
 💾 *Memória*
 Total: \`${formatBytes(total)}\`
 Usada: \`${formatBytes(used)}\`
 Livre: \`${formatBytes(free)}\`
 
-👤 *User*
-Nome: \`${user.username}\`
-Shell: \`${user.shell || '—'}\`
-Home: \`${homedir}\`
-Tmp: \`${tmpdir}\`
-DevNull: \`${devNull}\`
-
-⏱️ *Uptime*: \`${(uptime / 3600).toFixed(2)} h\`
-`;
+⏱️ *Uptime do sistema*: \`${(uptime / 3600).toFixed(2)} h\`
+⏳ *So𝘳dBOT rodando há*: \`${hrs}h ${mins}m\``;
 
   await sock.sendMessage(jid, { text: texto.trim() }, { quoted: msg });
 }

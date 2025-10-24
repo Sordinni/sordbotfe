@@ -1,16 +1,15 @@
-/* toggleStretch.js – reescrito para Baileys 6.7.20 (JS puro) */
-const { toggleStretch } = require('./userMeta');
+const { toggleStretch } = require('./utils');
 
 async function handleToggle(sock, msg) {
   const jid = msg.key.remoteJid;
-  if (!jid.endsWith('@g.us')) return false;          // só grupos
+
 
   const body = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '')
     .trim()
     .toLowerCase();
   if (body !== 'alternar') return false;
 
-  const userId = msg.participant || msg.key.participant;
+const userId = msg.key.participant || msg.key.remoteJid;
   const newState = toggleStretch(userId);            // true/false
 
   await sock.sendMessage(jid, {

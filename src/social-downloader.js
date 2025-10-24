@@ -1,4 +1,3 @@
-// social-downloader.js – VERSÃO COMPLETA E PROTEGIDA PARA BAILEYS
 const { instagramGetUrl } = require("instagram-url-direct");
 const { pinterest } = require('btch-downloader');
 const download = require('yt-stream');
@@ -190,7 +189,7 @@ async function handleSocialMediaDownload(sock, message) {
       return false;
     }
 
-    await sock.sendMessage(message.key.remoteJid, { react: { text: '⌛', key: message.key } });
+    await sock.sendMessage(message.key.remoteJid, { react: { text: '🟠', key: message.key } });
 
     const medias = await mediaProcessor();
     if (!medias || medias.length === 0) {
@@ -215,7 +214,7 @@ async function handleSocialMediaDownload(sock, message) {
       }
     }
 
-    await sock.sendMessage(message.key.remoteJid, { react: { text: '✅', key: message.key } });
+    await sock.sendMessage(message.key.remoteJid, { react: { text: '🟢', key: message.key } });
     return true;
   } catch (error) {
     console.error(`❌ Erro ao processar ${platform}:`, error);

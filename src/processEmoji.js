@@ -1,5 +1,5 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { getUserMeta } = require('./userMeta');
+const { getUserMeta } = require('./utils');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');

@@ -1,6 +1,6 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { createCanvas, loadImage } = require('canvas');
-const { getUseStretch, getUserMeta } = require('./userMeta');
+const { getUseStretch, getUserMeta } = require('./utils');
 const sharp = require('sharp');
 const fs = require('fs-extra');
 const path = require('path');
@@ -61,11 +61,11 @@ async function addExifToWebp(webpBuffer, exifBuffer) {
 async function processImage(sock, mediaMsg, fullMsg) {
   try {
     const jid = fullMsg.key.remoteJid; // Ensure jid is defined
-    const user = fullMsg.participant || fullMsg.key.participant;
+    const user = fullMsg.participant || fullMsg.key.remoteJid;
     const msgKey = fullMsg.key;
 
     /* reação rápida */
-    await sock.sendMessage(jid, { react: { text: '🖐️', key: msgKey } });
+    await sock.sendMessage(jid, { react: { text: '🟠', key: msgKey } });
 
     /* metadados dinâmicos */
     const meta = getUserMeta(user) || {};
@@ -94,8 +94,8 @@ async function processImage(sock, mediaMsg, fullMsg) {
       author,
     }, { quoted: fullMsg });
 
-    /* apaga mensagem original */
-    await sock.sendMessage(jid, { delete: msgKey });
+
+    await sock.sendMessage(jid, { react: { text: '🟢', key: msgKey } });
   } catch (err) {
     console.error('Erro ao processar imagem:', err);
     await sock.sendMessage(jid, {

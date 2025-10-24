@@ -2,9 +2,10 @@ node_modules
 stickers_temp
 stickers_download
 /src/temp/
-/sessão/*
+/sessao/*
 /db/users.json
-sessão
+db
+sessao
 # managed by open-wa
 **.data.json
 **.node-persist**

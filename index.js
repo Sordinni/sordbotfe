@@ -9,220 +9,367 @@ const {
 const { Boom } = require('@hapi/boom');
 
 // ---------- Módulos auxiliares ----------
-const { processImage }    = require('./src/processImage');
-const { processVideo }    = require('./src/processVideo');
-const { handleToggle }    = require('./src/toggleStretch');
+const { processImage } = require('./src/processImage');
+const { processVideo } = require('./src/processVideo');
+const { handleToggle } = require('./src/toggleStretch');
 const { handleSocialMediaDownload } = require('./src/social-downloader');
-const { handleRenameSticker }       = require('./src/renameStickerMeta');
-const { handleEmoji }     = require('./src/processEmoji');
+const { handleRenameSticker } = require('./src/renameStickerMeta');
+const { handleEmoji } = require('./src/processEmoji');
 const { handlePing } = require('./src/ping');
+const { isUserInAvisosGroup, sendHelp, logAction, handleAdminResponse, incSticker } = require('./src/utils');
 
-/* ---------- Logger ---------- */
+/* ---------- NOVO: Rate-Limiting ---------- */
+const { checkLimit, sendLimitStatus } = require('./src/rateLimiteSticker');
+
+/* ---------- Configuração e Start do Bot ---------- */
 const logger = pino({ level: 'fatal' });
+let startTime = new Date(); // garantido antes de qq uso
 
-function logAction(action, user, chat, start = Date.now()) {
-  const elapsed = Date.now() - start;
-  const ts = new Date().toLocaleString('pt-BR');
-  console.log(
-    `\x1b[36m[${ts}]\x1b[0m ` +
-    `\x1b[33m${action}\x1b[0m – ` +
-    `\x1b[32m${user || 'Desconhecido'}\x1b[0m ` +
-    `no grupo \x1b[35m${chat?.name || chat}\x1b[0m ` +
-    `(\x1b[31m${elapsed}ms\x1b[0m)`
-  );
-}
+let qrAttempts = 0;         // evita flood de QR
+const MAX_QR = 5;
+
+/* ---------- Helper: delay aleatório 1-3 s ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 async function start() {
-  const { version } = await fetchLatestBaileysVersion();
-  const { state, saveCreds } = await useMultiFileAuthState('./sessão');
+  try {
+    const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } = await useMultiFileAuthState('./sessao'); // nome sem acento
 
-  const sock = makeWASocket({
-    version,
-    logger,
-    auth: state,
-    browser: ['SordBOT-FE', 'Chrome', '1.0.0'],
-    markOnlineOnConnect: false,
-  });
+    const sock = makeWASocket({
+      version,
+      logger,
+      auth: state,
+      browser: ['SordBOT-Privado', 'macOS', '14.4.1'],
+      markOnlineOnConnect: false,
+    });
 
-  let msgCount = 0;
+    sock.ev.on('creds.update', saveCreds);
 
-  async function cleanCache() {
-    console.log('🧹 200 msgs – limpando caches...');
-    msgCount = 0;
-    console.log('✅ Cache limpo (simulado)');
-  }
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
 
-  sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      const qrcode = require('qrcode-terminal');
-      qrcode.generate(qr, { small: true });
-    }
-
-    if (connection === 'close') {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Conexão fechada. Reconectando...', shouldReconnect);
-      if (shouldReconnect) start();
-    } else if (connection === 'open') {
-      console.log('🤖 SordBOT FE conectado!');
-    }
-  });
-
-  /* ---------- Handler de mensagens ---------- */
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-
-    for (const msg of messages) {
-      if (!msg.message) continue;
-      const isGroup = msg.key.remoteJid.endsWith('@g.us');
-      if (!isGroup) continue;
-
-      msgCount++;
-      if (msgCount >= 200) await cleanCache();
-
-      const safeMessage = {
-        ...msg,
-        message: msg.message || {},
-        key: msg.key || {},
-        pushName: msg.pushName || 'Desconhecido',
-      };
-
-      const body = safeMessage.message.conversation || safeMessage.message.extendedTextMessage?.text || '';
-      const lower = body.trim().toLowerCase();
-      let processed = false;
-
-      /* ---------- AJUDA ---------- */
-      if (lower === '!ajuda' || lower === 'ajuda') {
-        const t0 = Date.now();
-        await sendHelp(sock, safeMessage.key.remoteJid, { quoted: safeMessage });
-        logAction('Comando ajuda executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t0);
-        processed = true;
+      if (qr && qrAttempts < MAX_QR) {
+        qrAttempts++;
+        const qrcode = require('qrcode-terminal');
+        qrcode.generate(qr, { small: true });
       }
 
-      /* ---------- ALTERNAR ---------- */
-      if (!processed) {
-        const t1 = Date.now();
-        const toggled = await handleToggle(sock, safeMessage);
-        if (toggled) {
-          logAction('Comando alternar executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t1);
+      if (connection === 'close') {
+        const shouldReconnect =
+          (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
+        console.log('Conexão fechada. Reconectando...', shouldReconnect);
+        if (shouldReconnect) start();
+      } else if (connection === 'open') {
+        qrAttempts = 0; // reseta contador
+        console.log('🤖 SordBOT Privado conectado!');
+      }
+    });
+
+    /* ---------- Handler de mensagens (Apenas Privado) ---------- */
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
+
+      for (const msg of messages) {
+        if (!msg.message) continue;
+
+        // Handler do grupo de ADMs
+        if (msg.key.remoteJid === '120363287595102262@g.us') {
+          await handleAdminResponse(sock, msg);
+          continue;
+        }
+
+        const isPrivate = !msg.key.remoteJid.endsWith('@g.us');
+        if (!isPrivate) continue;
+
+        const safeMessage = {
+          ...msg,
+          message: msg.message || {},
+          key: msg.key || {},
+          pushName: msg.pushName || 'Desconhecido',
+        };
+
+        const body =
+          safeMessage.message.conversation ||
+          safeMessage.message.extendedTextMessage?.text ||
+          '';
+        const lower = body.trim().toLowerCase();
+        let processed = false;
+
+        /* ---------- GATEKEEPER ---------- */
+        const userJid = msg.key.participant || msg.key.remoteJid;
+        console.debug(`[GATEKEEPER] userJid extraído: ${userJid}`);
+
+        const isAvisos = await isUserInAvisosGroup(sock, userJid);
+        console.debug(`[GATEKEEPER] isUserInAvisosGroup(${userJid}) → ${isAvisos}`);
+
+        if (!isAvisos) {
+          console.debug(`[GATEKEEPER] BLOQUEANDO ${userJid} – fora do grupo de avisos`);
+          await sleep(r(1000, 3000));
+          await sock.updateBlockStatus(userJid, 'block');
+          return;
+        }
+        console.debug(`[GATEKEEPER] ${userJid} PERMITIDO – está no grupo de avisos`);
+
+        /* ---------- AJUDA ---------- */
+        const helpAliases = [
+          '!ajuda', 'ajuda', '!help', 'help', '!comandos', 'comandos', '!cmds', 'cmds',
+          '!menu', 'menu', '!lista', 'lista', '!bot', 'bot',
+          '!suporte', 'suporte', '!funcoes', 'funcoes', '!funções', 'funções'
+        ];
+
+        if (helpAliases.includes(lower)) {
+          await sleep(r(1000, 3000));
+          await sendHelp(sock, safeMessage.key.remoteJid, { quoted: safeMessage });
+          logAction('Comando ajuda executado', safeMessage.pushName, Date.now());
           processed = true;
         }
-      }
 
-      /* ---------- RENOMEAR ---------- */
-      if (!processed) {
-        const t2 = Date.now();
-        const renamed = await handleRenameSticker(sock, safeMessage);
-        if (renamed) {
-          logAction('Comando renomear executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t2);
+        /* ---------- LIMIT ---------- */
+        const limitAliases = ['!limite', 'limite', '!limit', 'limit'];
+        if (!processed && limitAliases.includes(lower)) {
+          await sleep(r(1000, 3000));
+          await sendLimitStatus(sock, safeMessage);
+          logAction('Comando limite executado', safeMessage.pushName, Date.now());
           processed = true;
         }
-      }
 
-      /* ---------- DOWNLOAD REDE SOCIAL ---------- */
-      if (!processed) {
-        const t3 = Date.now();
-        const socialProcessed = await handleSocialMediaDownload(sock, safeMessage);
-        if (socialProcessed) {
-          logAction('Download de mídia social executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t3);
-          processed = true;
+        /* ---------- ALTERNAR ---------- */
+        if (!processed) {
+          const toggled = await handleToggle(sock, safeMessage);
+          if (toggled) {
+            logAction('Comando alternar executado', safeMessage.pushName, Date.now());
+            processed = true;
+          }
         }
-      }
 
-      /* ---------- FIG ---------- */
-      if (!processed && lower === 'fig') {
-        const t4 = Date.now();
-        const quoted = safeMessage.message.extendedTextMessage?.contextInfo?.quotedMessage;
-        if (!quoted) {
-          await sock.sendMessage(safeMessage.key.remoteJid, {
-            text: '❕ Responda uma imagem, vídeo ou GIF com *fig* para virar sticker.',
-          }, { quoted: safeMessage });
-          logAction('Tentativa de fig sem mídia respondida', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
-          processed = true;
-        } else {
+        /* ---------- RENOMEAR ---------- */
+        if (!processed) {
+          const renamed = await handleRenameSticker(sock, safeMessage);
+          if (renamed) {
+            logAction('Comando renomear executado', safeMessage.pushName, Date.now());
+            processed = true;
+          }
+        }
+
+        /* ---------- DOWNLOAD REDE SOCIAL ---------- */
+        if (!processed) {
+          const socialProcessed = await handleSocialMediaDownload(sock, safeMessage);
+          if (socialProcessed) {
+            logAction('Download de mídia social executado', safeMessage.pushName, Date.now());
+            processed = true;
+          }
+        }
+
+        /* ---------- FIG ---------- */
+        if (!processed && lower === 'fig') {
+          const quoted = safeMessage.message.extendedTextMessage?.contextInfo?.quotedMessage;
+          if (!quoted) {
+            await sleep(r(1000, 3000));
+            await sock.sendMessage(
+              safeMessage.key.remoteJid,
+              { text: '❕ Responda uma imagem, vídeo ou GIF com *fig* para virar sticker.' },
+              { quoted: safeMessage }
+            );
+            logAction('Tentativa de fig sem mídia respondida', safeMessage.pushName, Date.now());
+            processed = true;
+            continue;
+          }
+
+          /* ===== RATE-LIMIT ===== */
+          const limit = checkLimit(userJid, true); // consome 1 slot
+          if (!limit.allowed) {
+            logAction('Rate-limit bloqueou figurinha', safeMessage.pushName, Date.now());
+            processed = true;
+            continue;
+          }
+          if (limit.blockedNow) {
+            await sleep(r(1000, 3000));
+            await sock.sendMessage(
+              userJid,
+              { text: `⏳ Você atingiu 5 figurinhas. Aguarde 6 minutos para criar novamente.` },
+              { quoted: safeMessage }
+            );
+          }
+          /* ====================== */
+
           const type = Object.keys(quoted)[0];
           switch (type) {
             case 'imageMessage':
               await processImage(sock, quoted.imageMessage, safeMessage);
-              logAction('Sticker criado (imagem via fig)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+              logAction('Sticker criado (imagem via fig)', safeMessage.pushName, Date.now());
+              incSticker(userJid, msg.pushName, 'static');
               processed = true;
               break;
             case 'videoMessage':
               await processVideo(sock, quoted.videoMessage, safeMessage);
-              logAction('Sticker animado criado (vídeo via fig)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+              logAction('Sticker animado criado (vídeo via fig)', safeMessage.pushName, Date.now());
+              incSticker(userJid, msg.pushName, 'animated');
               processed = true;
               break;
             default:
-              await sock.sendMessage(safeMessage.key.remoteJid, {
-                text: '❕ A mensagem respondida não é uma mídia válida.',
-              }, { quoted: safeMessage });
-              logAction('Tentativa de fig com mídia inválida', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t4);
+              await sleep(r(1000, 3000));
+              await sock.sendMessage(
+                safeMessage.key.remoteJid,
+                { text: '❕ A mensagem respondida não é uma mídia válida.' },
+                { quoted: safeMessage }
+              );
+              logAction('Tentativa de fig com mídia inválida', safeMessage.pushName, Date.now());
               processed = true;
           }
         }
-      }
-/* ---------- PING ---------- */
-if (lower === 'ping') {
-  const t0 = Date.now();
-  await handlePing(sock, safeMessage);
-  logAction('Comando ping executado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t0);
-  processed = true;
-}
-      /* ---------- EMOJI ---------- */
-      if (!processed) {
-        const t5 = Date.now();
-        const emojiSent = await handleEmoji(sock, safeMessage);
-        if (emojiSent) {
-          logAction('Sticker de emoji criado', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t5);
+
+        /* ---------- STATS (pessoal) ---------- */
+        if (!processed && lower === 'stats') {
+          const { getStats } = require('./src/utils');
+          const st = getStats(userJid);
+          const nome = msg.pushName || 'Você';
+          const total = st.stickers.static + st.stickers.animated;
+          const texto =
+            `*Suas estatísticas, ${nome}*\n\n` +
+            `📦 Total de figurinhas: ${total}\n` +
+            `       *Figurinhas*: ${st.stickers.static}\n` +
+            `       *Figurinhas animadas*: ${st.stickers.animated}\n` +
+            `📅 Primeiro uso: ${new Date(st.firstSeen).toLocaleString('pt-BR')}`;
+
+          await sleep(r(1000, 3000));
+          await sock.sendMessage(safeMessage.key.remoteJid, { text: texto }, { quoted: safeMessage });
           processed = true;
         }
-      }
 
-      /* ---------- MÍDIA DIRETA ---------- */
-      if (!processed) {
-        const t6 = Date.now();
-        const type = Object.keys(safeMessage.message)[0];
-        switch (type) {
-          case 'imageMessage':
-            await processImage(sock, safeMessage.message.imageMessage, safeMessage);
-            logAction('Sticker criado (imagem direta)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t6);
+        /* ---------- INFO DO BOT ---------- */
+        if (!processed && (lower === 'info' || lower === '!info')) {
+          const repo = 'https://github.com/Sordinni/sordbotfe';
+          const vcard =
+            'BEGIN:VCARD\n' +
+            'VERSION:3.0\n' +
+            'FN:Juan Sordinni\n' +
+            'ORG:SordBOT;\n' +
+            'TEL;type=CELL;type=VOICE;waid=32472916180:+32 472 91 61 80\n' +
+            'END:VCARD';
+          const texto =
+            `🔴 *So𝘳dBOT Rouge*\n` +
+            `🔖 *Versão:* xx \n\n` +
+            `💰 *Gastos*\n` +
+            `- Número (Rouge): €18,99/mês\n` +
+            `- Número (Noir): €18,99/mês\n` +
+            `- VPS 16GB 8vCPU: €35,99/mês\n\n` +
+            `📅 *Online desde:* ${startTime.toLocaleString('pt-BR')}\n\n` +
+            `📦 *Bibliotecas*\n` +
+            `- @whiskeysockets/baileys\n` +
+            `- @open-wa/wa-automate\n\n` +
+            `📦 *Código-fonte:*\n${repo}\n\n` +
+            `💡 Dúvidas ou alguma sugestão? Fale com o contato abaixo.`;
+
+          await sleep(r(1000, 3000));
+          await sock.sendMessage(safeMessage.key.remoteJid, { text: texto }, { quoted: safeMessage });
+          await sleep(r(1000, 3000));
+          await sock.sendMessage(
+            safeMessage.key.remoteJid,
+            {
+              contacts: {
+                displayName: 'Juan Sordinni',
+                contacts: [{ vcard }]
+              }
+            }
+          );
+          logAction('Comando info executado', safeMessage.pushName, Date.now());
+          processed = true;
+        }
+
+        /* ---------- PING ---------- */
+        if (!processed && lower === 'ping') {
+          await sleep(r(1000, 3000));
+          await handlePing(sock, safeMessage);
+          logAction('Comando ping executado', safeMessage.pushName, Date.now());
+          processed = true;
+        }
+
+        /* ---------- EMOJI ---------- */
+        if (!processed) {
+          const emojiSent = await handleEmoji(sock, safeMessage);
+          if (emojiSent) {
+            logAction('Sticker de emoji criado', safeMessage.pushName, Date.now());
             processed = true;
-            break;
-          case 'videoMessage':
-            await processVideo(sock, safeMessage.message.videoMessage, safeMessage);
-            logAction('Sticker animado criado (vídeo direto)', safeMessage.pushName, { name: safeMessage.key.remoteJid }, t6);
-            processed = true;
-            break;
+          }
+        }
+
+        /* ---------- MÍDIA DIRETA ---------- */
+        if (!processed) {
+          const type = Object.keys(safeMessage.message)[0];
+          switch (type) {
+            case 'imageMessage': {
+              /* ===== RATE-LIMIT ===== */
+              const limit = checkLimit(userJid, true);
+              if (!limit.allowed) {
+                const { min, sec } = limit.remaining;
+                await sleep(r(1000, 3000));
+                await sock.sendMessage(
+                  userJid,
+                  { text: `⏳ Limite atingido! Aguarde *${min}* minutos e *${sec}* segundos.` },
+                  { quoted: safeMessage }
+                );
+                logAction('Rate-limit bloqueou figurinha (imagem direta)', safeMessage.pushName, Date.now());
+                processed = true;
+                break;
+              }
+              if (limit.blockedNow) {
+                await sleep(r(1000, 3000));
+                await sock.sendMessage(
+                  userJid,
+                  { text: `⏳ Você atingiu 5 figurinhas. Aguarde 6 minutos para criar novamente.` },
+                  { quoted: safeMessage }
+                );
+              }
+              /* ====================== */
+              await processImage(sock, safeMessage.message.imageMessage, safeMessage);
+              logAction('Sticker criado (imagem direta)', safeMessage.pushName, Date.now());
+              incSticker(userJid, msg.pushName, 'static');
+              processed = true;
+              break;
+            }
+            case 'videoMessage': {
+              /* ===== RATE-LIMIT ===== */
+              const limit = checkLimit(userJid, true);
+              if (!limit.allowed) {
+                const { min, sec } = limit.remaining;
+                await sleep(r(1000, 3000));
+                await sock.sendMessage(
+                  userJid,
+                  { text: `⏳ Limite atingido! Aguarde *${min}* minutos e *${sec}* segundos.` },
+                  { quoted: safeMessage }
+                );
+                logAction('Rate-limit bloqueou figurinha (vídeo direto)', safeMessage.pushName, Date.now());
+                processed = true;
+                break;
+              }
+              if (limit.blockedNow) {
+                await sleep(r(1000, 3000));
+                await sock.sendMessage(
+                  userJid,
+                  { text: `⏳ Você atingiu 5 figurinhas. Aguarde 6 minutos para criar novamente.` },
+                  { quoted: safeMessage }
+                );
+              }
+              /* ====================== */
+              await processVideo(sock, safeMessage.message.videoMessage, safeMessage);
+              logAction('Sticker animado criado (vídeo direto)', safeMessage.pushName, Date.now());
+              incSticker(userJid, msg.pushName, 'animated');
+              processed = true;
+              break;
+            }
+          }
         }
       }
-    }
-  });
+    });
+  } catch (err) {
+    console.error('Erro fatal ao iniciar:', err);
+    process.exit(1); // evita loop infinito em caso de falha grave
+  }
 }
 
-/* ---------- Ajuda ---------- */
-async function sendHelp(sock, jid, quote) {
-  const text = `🤖 *SordBOT FE – Central de Ajuda*
+module.exports = { get startTime() { return startTime; } };
 
-*Como usar*
-• 📷 Envie uma imagem → vira sticker
-• 🎥 Envie vídeo/GIF (até 10 s) → sticker animado
-• ⬇️ Envie link de Twitter, Instagram, TikTok ou Pinterest → baixa mídia
-
-*Comandos:*
-• \`ajuda\` → esta mensagem
-• \`alternar\` → liga/desliga stretch
-• \`fig\` → responda mídia com fig para virar sticker
-• \`renomear "nome" "autor"\` → renomeia os stickers
-• \`ping\` → verifica se o bot está online
-
-*Extras:*
-• Cache limpo a cada 200 mensagens
-• Só funciona em grupos`;
-await sock.sendMessage(jid, { text }, quote);
-}
 /* ---------- Start ---------- */
 start().catch(console.error);

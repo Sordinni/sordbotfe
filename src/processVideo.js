@@ -1,8 +1,8 @@
-const { decryptMedia }         = require('@open-wa/wa-decrypt');
-const axios                    = require('axios');
-const { getUserMeta }          = require('./userMeta');
-const crypto                   = require('crypto');
-const webp                     = require('node-webpmux');
+const { decryptMedia } = require('@open-wa/wa-decrypt');
+const axios = require('axios');
+const { getUserMeta } = require('./utils');
+const crypto = require('crypto');
+const webp = require('node-webpmux');
 
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
 const MAX_STICKER_SIZE = 1 * 1024 * 1024; // 1 MB em bytes
@@ -39,17 +39,17 @@ async function addExifToWebp(webpBuffer, exifBuffer) {
 }
 
 async function processVideo(sock, mediaObj, fullMsg) {
-  const jid  = fullMsg.key.remoteJid;
-  const user = fullMsg.participant || fullMsg.key.participant;
-  const key  = lockKey(jid, user);
+  const jid = fullMsg.key.remoteJid;
+  const user = fullMsg.participant || fullMsg.key.remoteJid;
+  const key = lockKey(jid, user);
   if (processing.has(key)) return;
   processing.set(key, true);
 
   try {
-    await sock.sendMessage(jid, { react: { text: '🖐️', key: fullMsg.key } });
+    await sock.sendMessage(jid, { react: { text: '🟠', key: fullMsg.key } });
 
-    const meta   = getUserMeta(user) || {};
-    const pack   = meta.pack  || 'figurinha por';
+    const meta = getUserMeta(user) || {};
+    const pack = meta.pack || 'figurinha por';
     const author = meta.author || 'So𝘳dBOT';
 
     /* ---------- 1. validação ---------- */
@@ -60,13 +60,13 @@ async function processVideo(sock, mediaObj, fullMsg) {
 
     /* ---------- 2. decriptação ---------- */
     const decryptParams = {
-      clientUrl        : mediaObj.url,
+      clientUrl: mediaObj.url,
       deprecatedMms3Url: mediaObj.url,
-      mediaKey         : mediaObj.mediaKey,
-      mimetype         : mediaObj.mimetype,
-      filehash         : Buffer.from(mediaObj.fileSha256).toString('base64'),
-      type             : mediaObj.mimetype.split('/')[0],
-      size             : Number(mediaObj.fileLength) || 0,
+      mediaKey: mediaObj.mediaKey,
+      mimetype: mediaObj.mimetype,
+      filehash: Buffer.from(mediaObj.fileSha256).toString('base64'),
+      type: mediaObj.mimetype.split('/')[0],
+      size: Number(mediaObj.fileLength) || 0,
     };
 
     let mediaBuffer;
@@ -102,7 +102,7 @@ async function processVideo(sock, mediaObj, fullMsg) {
         }
 
         await sock.sendMessage(jid, { sticker: webpBuffer }, { quoted: fullMsg });
-        await sock.sendMessage(jid, { delete: fullMsg.key });
+        await sock.sendMessage(jid, { react: { text: '🟢', key: fullMsg.key } });
         return;
       } catch (e) {
       }
@@ -110,7 +110,7 @@ async function processVideo(sock, mediaObj, fullMsg) {
 
     /* ---------- 6. nenhuma tentativa atendeu ao limite ---------- */
     await sock.sendMessage(jid, { text: '❌ A figurinha ficou maior que 1 MB em todas as taxas de FPS.' }, { quoted: fullMsg });
-    await sock.sendMessage(jid, { react: { text: '🥲', key: fullMsg.key } });
+    await sock.sendMessage(jid, { react: { text: '🔴', key: fullMsg.key } });
   } catch (e) {
     await sock.sendMessage(jid, { text: '❌ Erro ao processar o vídeo.' }, { quoted: fullMsg });
   } finally {
