@@ -1,18 +1,15 @@
-/* src/utils.js – unificado: stats + metadados + helpers gerais */
 const fs   = require('fs-extra');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-/* ---------- Helper: delay aleatório 1-3 s ---------- */
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-/* ---------- Config ---------- */
 const ADMIN_GROUP_ID  = '120363287595102262@g.us';
 const AVISOS_GROUP_ID = '120363046428170312@g.us';
 const DB_FILE         = path.join(__dirname, '..', 'db', 'users.json');
 fs.ensureFileSync(DB_FILE);
 
-/* ---------- helpers DB ---------- */
 function loadAll() {
   try { return fs.readJsonSync(DB_FILE) || {}; }
   catch { return {}; }
@@ -30,9 +27,6 @@ function ensureUser(db, userId) {
   }
 }
 
-/* ==========================
-   USER STATS (antigo userStats.js)
-   ========================== */
 function incSticker(jid, pushName, type /* 'static' | 'animated' */) {
   const db = loadAll();
   ensureUser(db, jid);
@@ -53,9 +47,6 @@ function getStats(jid) {
   return db[jid];
 }
 
-/* ==========================
-   USER META (antigo userMeta.js)
-   ========================== */
 function toggleStretch(userId) {
   if (!userId) return true;
   const db = loadAll();
@@ -97,22 +88,32 @@ function resetUserMeta(userId) {
   }
 }
 
-/* ==========================
-   GRUPOS / ADMIN
-   ========================== */
+
 async function isUserInAvisosGroup(sock, userJid) {
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
-    const isMember = Array.isArray(meta.participants) &&
-                     meta.participants.some(p => p.id === userJid);
-    if (!isMember) {
-      await sock.updateBlockStatus(userJid, 'block');
-      await notifyAdminsBlock(sock, userJid);
-      return false;
+
+    const participantsIds = meta.participants.map(p => p.id);
+
+    // 1ª tentativa: JID exato que chegou
+    if (participantsIds.includes(userJid)) {
+      return true;
     }
-    return true;
+
+    // 2ª tentativa: troca @lid ↔ @s.whatsapp.net
+    const altJid = userJid.endsWith('@lid')
+      ? userJid.replace('@lid', '@s.whatsapp.net')
+      : userJid.replace('@s.whatsapp.net', '@lid');
+
+    if (participantsIds.includes(altJid)) {
+      return true;
+    }
+
+    await sock.updateBlockStatus(userJid, 'block');
+    await notifyAdminsBlock(sock, userJid);
+    return false;
   } catch (e) {
-    console.error('Erro ao buscar grupo de avisos:', e);
+    console.error('[AVISOS] Erro ao buscar grupo de avisos:', e);
     return false;
   }
 }
@@ -164,9 +165,6 @@ async function handleAdminResponse(sock, msg) {
   }
 }
 
-/* ==========================
-   AJUDA / LOG
-   ========================== */
 async function sendHelp(sock, jid, quote) {
   const text = `🔴 *So𝘳dBOT Rouge* · Central de Ajuda
 
@@ -203,25 +201,21 @@ function logAction(action, user, start = Date.now()) {
   );
 }
 
-/* ==========================
-   EXPORTAÇÃO ÚNICA
-   ========================== */
 module.exports = {
-  /* ----- stats ----- */
   incSticker,
   getStats,
-  /* ----- meta ------ */
+
   toggleStretch,
   getUseStretch,
   getUserMeta,
   setUserMeta,
   resetUserMeta,
-  /* ----- grupos ---- */
+
   isUserInAvisosGroup,
   handleAdminResponse,
   sendHelp,
   logAction,
-  /* ----- expõe helpers ----- */
+
   loadAll,
   saveAll
 };

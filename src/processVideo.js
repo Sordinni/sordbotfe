@@ -5,16 +5,16 @@ const crypto = require('crypto');
 const webp = require('node-webpmux');
 
 const FPS_POOL = [60, 30, 20, 17, 16, 15, 12, 10, 9];
-const MAX_STICKER_SIZE = 1 * 1024 * 1024; // 1 MB em bytes
+const MAX_STICKER_SIZE = 1 * 1024 * 1024;
 
-/* evita processamento duplicado */
 const processing = new Map();
 function lockKey(jid, user) { return `${jid}_${user}`; }
 
 const STICKER_ENDPOINT = 'https://sticker-api.openwa.dev/convertMp4BufferToWebpDataUrl';
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-/* ---------- helpers de metadados ---------- */
 async function createExifBuffer(pack, author) {
   const json = {
     'sticker-pack-id': crypto.randomBytes(32).toString('hex'),
@@ -52,13 +52,11 @@ async function processVideo(sock, mediaObj, fullMsg) {
     const pack = meta.pack || 'figurinha por';
     const author = meta.author || 'So𝘳dBOT';
 
-    /* ---------- 1. validação ---------- */
     if (!mediaObj.url || !mediaObj.mediaKey || !mediaObj.mimetype) {
       await sock.sendMessage(jid, { text: '❌ Mídia inválida ou ainda não foi descarregada pelo WhatsApp.' }, { quoted: fullMsg });
       return;
     }
 
-    /* ---------- 2. decriptação ---------- */
     const decryptParams = {
       clientUrl: mediaObj.url,
       deprecatedMms3Url: mediaObj.url,
@@ -77,7 +75,6 @@ async function processVideo(sock, mediaObj, fullMsg) {
       return;
     }
 
-    /* ---------- 3. loop de FPS ---------- */
     for (const fps of FPS_POOL) {
       try {
         const { data: webpDataUrl } = await axios.post(
@@ -85,22 +82,20 @@ async function processVideo(sock, mediaObj, fullMsg) {
           {
             file: mediaBuffer.toString('base64'),
             processOptions: { fps, startTime: '00:00:00.0', endTime: '00:00:10.0', square: 210 },
-            stickerMetadata: { pack, author } // ainda usado pela API, mas vamos sobrescrever
+            stickerMetadata: { pack, author }
           },
           { maxBodyLength: 20 * 1024 * 1024 }
         );
 
         let webpBuffer = Buffer.from(webpDataUrl.replace(/^data:image\/webp;base64,/, ''), 'base64');
 
-        /* ---------- 4. adiciona EXIF manualmente ---------- */
         const exifBuffer = await createExifBuffer(pack, author);
         webpBuffer = await addExifToWebp(webpBuffer, exifBuffer);
 
-        /* ---------- 5. VERIFICA TAMANHO FINAL ---------- */
         if (webpBuffer.length > MAX_STICKER_SIZE) {
           continue; // tenta próximo FPS
         }
-
+        await sleep(r(1000, 3000));
         await sock.sendMessage(jid, { sticker: webpBuffer }, { quoted: fullMsg });
         await sock.sendMessage(jid, { react: { text: '🟢', key: fullMsg.key } });
         return;
@@ -108,7 +103,6 @@ async function processVideo(sock, mediaObj, fullMsg) {
       }
     }
 
-    /* ---------- 6. nenhuma tentativa atendeu ao limite ---------- */
     await sock.sendMessage(jid, { text: '❌ A figurinha ficou maior que 1 MB em todas as taxas de FPS.' }, { quoted: fullMsg });
     await sock.sendMessage(jid, { react: { text: '🔴', key: fullMsg.key } });
   } catch (e) {

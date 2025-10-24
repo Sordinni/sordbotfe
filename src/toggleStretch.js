@@ -9,8 +9,8 @@ async function handleToggle(sock, msg) {
     .toLowerCase();
   if (body !== 'alternar') return false;
 
-const userId = msg.key.participant || msg.key.remoteJid;
-  const newState = toggleStretch(userId);            // true/false
+  const userId = msg.key.participant || msg.key.remoteJid;
+  const newState = toggleStretch(userId);
 
   await sock.sendMessage(jid, {
     text: `✅ Figurinhas esticadas ${newState ? 'ativadas' : 'desativadas'} para você.`

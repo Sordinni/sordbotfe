@@ -2,12 +2,8 @@ node_modules
 stickers_temp
 stickers_download
 /src/temp/
-/sessao/*
-/db/users.json
 db
 sessao
-# managed by open-wa
 **.data.json
 **.node-persist**
 **_IGNORE_**
-# end managed by open-wa

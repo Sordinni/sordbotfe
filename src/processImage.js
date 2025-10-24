@@ -7,9 +7,10 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const webp = require('node-webpmux');
-const crypto = require('crypto'); // Import crypto module
+const crypto = require('crypto');
 
-const execAsync = promisify(exec);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 async function stretchImage(buffer) {
   const img = await loadImage(buffer);
@@ -22,13 +23,11 @@ async function stretchImage(buffer) {
 
 async function createSticker(buffer, pack, author) {
   try {
-    // Resize and convert to WebP
     const stickerBuffer = await sharp(buffer)
       .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .webp({ quality: 90 })
       .toBuffer();
 
-    // Add EXIF metadata
     const exifBuffer = await createExifBuffer(pack, author);
     const finalBuffer = await addExifToWebp(stickerBuffer, exifBuffer);
 
@@ -60,18 +59,16 @@ async function addExifToWebp(webpBuffer, exifBuffer) {
 
 async function processImage(sock, mediaMsg, fullMsg) {
   try {
-    const jid = fullMsg.key.remoteJid; // Ensure jid is defined
+    const jid = fullMsg.key.remoteJid;
     const user = fullMsg.participant || fullMsg.key.remoteJid;
     const msgKey = fullMsg.key;
 
-    /* reação rápida */
     await sock.sendMessage(jid, { react: { text: '🟠', key: msgKey } });
 
-    /* metadados dinâmicos */
     const meta = getUserMeta(user) || {};
     const pack = meta.pack || 'figurinha por';
     const author = meta.author || 'So𝘳dBOT';
-    /* baixa a imagem */
+
     const buffer = await downloadMediaMessage(
       { key: msgKey, message: { imageMessage: mediaMsg } },
       'buffer',
@@ -79,15 +76,13 @@ async function processImage(sock, mediaMsg, fullMsg) {
       { logger: sock.logger }
     );
 
-    /* stretch opcional */
     const finalBuffer = getUseStretch(user)
       ? await stretchImage(buffer)
       : buffer;
 
-    /* cria sticker */
     const stickerBuffer = await createSticker(finalBuffer, pack, author);
 
-    /* envia sticker */
+    await sleep(r(1000, 3000));
     await sock.sendMessage(jid, {
       sticker: stickerBuffer,
       pack,
@@ -101,6 +96,7 @@ async function processImage(sock, mediaMsg, fullMsg) {
     await sock.sendMessage(jid, {
       text: '❌ Erro ao processar a imagem.'
     }, { quoted: fullMsg });
+    await sock.sendMessage(jid, { react: { text: '🔴', key: fullMsg.key } });
   }
 }
 

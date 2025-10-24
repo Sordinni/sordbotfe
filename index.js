@@ -8,7 +8,6 @@ const {
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 
-// ---------- Módulos auxiliares ----------
 const { processImage } = require('./src/processImage');
 const { processVideo } = require('./src/processVideo');
 const { handleToggle } = require('./src/toggleStretch');
@@ -18,24 +17,21 @@ const { handleEmoji } = require('./src/processEmoji');
 const { handlePing } = require('./src/ping');
 const { isUserInAvisosGroup, sendHelp, logAction, handleAdminResponse, incSticker } = require('./src/utils');
 
-/* ---------- NOVO: Rate-Limiting ---------- */
 const { checkLimit, sendLimitStatus } = require('./src/rateLimiteSticker');
 
-/* ---------- Configuração e Start do Bot ---------- */
 const logger = pino({ level: 'fatal' });
-let startTime = new Date(); // garantido antes de qq uso
+let startTime = new Date();
 
-let qrAttempts = 0;         // evita flood de QR
+let qrAttempts = 0;
 const MAX_QR = 5;
 
-/* ---------- Helper: delay aleatório 1-3 s ---------- */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 async function start() {
   try {
     const { version } = await fetchLatestBaileysVersion();
-    const { state, saveCreds } = await useMultiFileAuthState('./sessao'); // nome sem acento
+    const { state, saveCreds } = await useMultiFileAuthState('./sessao');
 
     const sock = makeWASocket({
       version,
@@ -62,19 +58,17 @@ async function start() {
         console.log('Conexão fechada. Reconectando...', shouldReconnect);
         if (shouldReconnect) start();
       } else if (connection === 'open') {
-        qrAttempts = 0; // reseta contador
+        qrAttempts = 0;
         console.log('🤖 SordBOT Privado conectado!');
       }
     });
 
-    /* ---------- Handler de mensagens (Apenas Privado) ---------- */
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return;
 
       for (const msg of messages) {
         if (!msg.message) continue;
 
-        // Handler do grupo de ADMs
         if (msg.key.remoteJid === '120363287595102262@g.us') {
           await handleAdminResponse(sock, msg);
           continue;
@@ -97,22 +91,19 @@ async function start() {
         const lower = body.trim().toLowerCase();
         let processed = false;
 
-        /* ---------- GATEKEEPER ---------- */
         const userJid = msg.key.participant || msg.key.remoteJid;
-        console.debug(`[GATEKEEPER] userJid extraído: ${userJid}`);
+        const lid = msg.key.participantAlt || msg.key.remoteJidAlt || null;
 
-        const isAvisos = await isUserInAvisosGroup(sock, userJid);
-        console.debug(`[GATEKEEPER] isUserInAvisosGroup(${userJid}) → ${isAvisos}`);
+        const finalJid = lid || userJid
+
+        const isAvisos = await isUserInAvisosGroup(sock, finalJid);
 
         if (!isAvisos) {
-          console.debug(`[GATEKEEPER] BLOQUEANDO ${userJid} – fora do grupo de avisos`);
           await sleep(r(1000, 3000));
-          await sock.updateBlockStatus(userJid, 'block');
+          await sock.updateBlockStatus(finalJid, 'block');
           return;
         }
-        console.debug(`[GATEKEEPER] ${userJid} PERMITIDO – está no grupo de avisos`);
 
-        /* ---------- AJUDA ---------- */
         const helpAliases = [
           '!ajuda', 'ajuda', '!help', 'help', '!comandos', 'comandos', '!cmds', 'cmds',
           '!menu', 'menu', '!lista', 'lista', '!bot', 'bot',
@@ -126,7 +117,6 @@ async function start() {
           processed = true;
         }
 
-        /* ---------- LIMIT ---------- */
         const limitAliases = ['!limite', 'limite', '!limit', 'limit'];
         if (!processed && limitAliases.includes(lower)) {
           await sleep(r(1000, 3000));
@@ -135,7 +125,6 @@ async function start() {
           processed = true;
         }
 
-        /* ---------- ALTERNAR ---------- */
         if (!processed) {
           const toggled = await handleToggle(sock, safeMessage);
           if (toggled) {
@@ -143,8 +132,6 @@ async function start() {
             processed = true;
           }
         }
-
-        /* ---------- RENOMEAR ---------- */
         if (!processed) {
           const renamed = await handleRenameSticker(sock, safeMessage);
           if (renamed) {
@@ -153,7 +140,6 @@ async function start() {
           }
         }
 
-        /* ---------- DOWNLOAD REDE SOCIAL ---------- */
         if (!processed) {
           const socialProcessed = await handleSocialMediaDownload(sock, safeMessage);
           if (socialProcessed) {
@@ -162,7 +148,6 @@ async function start() {
           }
         }
 
-        /* ---------- FIG ---------- */
         if (!processed && lower === 'fig') {
           const quoted = safeMessage.message.extendedTextMessage?.contextInfo?.quotedMessage;
           if (!quoted) {
@@ -177,8 +162,7 @@ async function start() {
             continue;
           }
 
-          /* ===== RATE-LIMIT ===== */
-          const limit = checkLimit(userJid, true); // consome 1 slot
+          const limit = checkLimit(userJid, true);
           if (!limit.allowed) {
             logAction('Rate-limit bloqueou figurinha', safeMessage.pushName, Date.now());
             processed = true;
@@ -192,7 +176,6 @@ async function start() {
               { quoted: safeMessage }
             );
           }
-          /* ====================== */
 
           const type = Object.keys(quoted)[0];
           switch (type) {
@@ -220,7 +203,6 @@ async function start() {
           }
         }
 
-        /* ---------- STATS (pessoal) ---------- */
         if (!processed && lower === 'stats') {
           const { getStats } = require('./src/utils');
           const st = getStats(userJid);
@@ -238,7 +220,6 @@ async function start() {
           processed = true;
         }
 
-        /* ---------- INFO DO BOT ---------- */
         if (!processed && (lower === 'info' || lower === '!info')) {
           const repo = 'https://github.com/Sordinni/sordbotfe';
           const vcard =
@@ -250,7 +231,7 @@ async function start() {
             'END:VCARD';
           const texto =
             `🔴 *So𝘳dBOT Rouge*\n` +
-            `🔖 *Versão:* xx \n\n` +
+            `🔖 *Versão:* \´d2410h1730\´ \n\n` +
             `💰 *Gastos*\n` +
             `- Número (Rouge): €18,99/mês\n` +
             `- Número (Noir): €18,99/mês\n` +
@@ -278,7 +259,6 @@ async function start() {
           processed = true;
         }
 
-        /* ---------- PING ---------- */
         if (!processed && lower === 'ping') {
           await sleep(r(1000, 3000));
           await handlePing(sock, safeMessage);
@@ -286,7 +266,6 @@ async function start() {
           processed = true;
         }
 
-        /* ---------- EMOJI ---------- */
         if (!processed) {
           const emojiSent = await handleEmoji(sock, safeMessage);
           if (emojiSent) {
@@ -295,12 +274,10 @@ async function start() {
           }
         }
 
-        /* ---------- MÍDIA DIRETA ---------- */
         if (!processed) {
           const type = Object.keys(safeMessage.message)[0];
           switch (type) {
             case 'imageMessage': {
-              /* ===== RATE-LIMIT ===== */
               const limit = checkLimit(userJid, true);
               if (!limit.allowed) {
                 const { min, sec } = limit.remaining;
@@ -322,7 +299,6 @@ async function start() {
                   { quoted: safeMessage }
                 );
               }
-              /* ====================== */
               await processImage(sock, safeMessage.message.imageMessage, safeMessage);
               logAction('Sticker criado (imagem direta)', safeMessage.pushName, Date.now());
               incSticker(userJid, msg.pushName, 'static');
@@ -330,7 +306,6 @@ async function start() {
               break;
             }
             case 'videoMessage': {
-              /* ===== RATE-LIMIT ===== */
               const limit = checkLimit(userJid, true);
               if (!limit.allowed) {
                 const { min, sec } = limit.remaining;
@@ -352,7 +327,6 @@ async function start() {
                   { quoted: safeMessage }
                 );
               }
-              /* ====================== */
               await processVideo(sock, safeMessage.message.videoMessage, safeMessage);
               logAction('Sticker animado criado (vídeo direto)', safeMessage.pushName, Date.now());
               incSticker(userJid, msg.pushName, 'animated');
@@ -365,11 +339,10 @@ async function start() {
     });
   } catch (err) {
     console.error('Erro fatal ao iniciar:', err);
-    process.exit(1); // evita loop infinito em caso de falha grave
+    process.exit(1);
   }
 }
 
 module.exports = { get startTime() { return startTime; } };
 
-/* ---------- Start ---------- */
 start().catch(console.error);

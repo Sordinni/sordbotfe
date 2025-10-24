@@ -11,7 +11,6 @@ const sharp = require('sharp');
 const STICKERS_DIR = path.join(__dirname, '..', 'stickers_temp');
 if (!fs.existsSync(STICKERS_DIR)) fs.mkdirSync(STICKERS_DIR, { recursive: true });
 
-// Baixa arquivo de URL
 async function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
@@ -26,7 +25,6 @@ async function downloadFile(url, destPath) {
   });
 }
 
-// Converte GIF para MP4
 async function gifToMp4(gifPath) {
   const mp4Path = gifPath.replace(/\.gif$/i, '.mp4');
   await execPromise(
@@ -35,7 +33,6 @@ async function gifToMp4(gifPath) {
   return mp4Path;
 }
 
-// Extrai ID do texto
 function extractId(text) {
   const match =
     text.match(/emoji\.gg\/\w+\/(\d+-[\w-]+)/i) ||
@@ -44,7 +41,6 @@ function extractId(text) {
   return match ? match[1] || match[2] || match[3] : null;
 }
 
-// Gera URLs possíveis
 function buildUrls(id) {
   return [
     `https://cdn.stickers.gg/stickers/${id}.gif`,
@@ -56,7 +52,6 @@ function buildUrls(id) {
   ];
 }
 
-// Manipula mensagem de emoji
 async function handleEmoji(sock, message) {
   const text = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim();
   const emojiId = extractId(text);
@@ -84,7 +79,6 @@ async function handleEmoji(sock, message) {
       isGif = ext === '.gif';
       break;
     } catch (e) {
-      // tenta próxima URL
     }
   }
 
@@ -108,13 +102,11 @@ async function handleEmoji(sock, message) {
     }
 
     if (isGif) {
-      // Envia sticker animado (video)
       await sock.sendMessage(message.key.remoteJid, {
         sticker: finalBuffer,
         quoted: message
       }, { url: mp4Path });
     } else {
-      // Converte imagem para sticker
       const stickerBuffer = await sharp(finalBuffer)
         .webp()
         .toBuffer();

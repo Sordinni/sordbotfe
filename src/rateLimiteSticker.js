@@ -1,10 +1,9 @@
-const { loadAll, saveAll } = require('./utils'); // mesmo arquivo de utils
+const { loadAll, saveAll } = require('./utils');
 
-const RATE_LIMIT       = 5;
+const RATE_LIMIT = 5;
 const COOLDOWN_MINUTES = 6;
-const COOLDOWN_MS      = COOLDOWN_MINUTES * 60 * 1000;
+const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
 
-/* ---------- helpers ---------- */
 function formatRemaining(until) {
   const now = Date.now();
   if (now >= until) return null;
@@ -14,13 +13,11 @@ function formatRemaining(until) {
   return { min, sec };
 }
 
-/* ---------- core ---------- */
 function checkLimit(userId, consume = false) {
-  if (!userId) return { allowed: false }; // segurança
-  const db  = loadAll();
+  if (!userId) return { allowed: false };
+  const db = loadAll();
   const now = Date.now();
 
-  // garante que o usuário existe
   if (!db[userId]) {
     db[userId] = {
       firstSeen: now,
@@ -31,12 +28,10 @@ function checkLimit(userId, consume = false) {
 
   const entry = db[userId]._limit || { count: 0, cooldown_until: 0 };
 
-  /* em cooldown? */
   if (now < entry.cooldown_until) {
     return { allowed: false, ...entry, remaining: formatRemaining(entry.cooldown_until) };
   }
 
-  /* resetou o ciclo */
   if (entry.cooldown_until && now >= entry.cooldown_until) {
     entry.count = 0;
     entry.cooldown_until = 0;
@@ -46,11 +41,10 @@ function checkLimit(userId, consume = false) {
     return { allowed: true, ...entry, left: RATE_LIMIT - entry.count };
   }
 
-  /* consome 1 slot */
   entry.count += 1;
   if (entry.count >= RATE_LIMIT) entry.cooldown_until = now + COOLDOWN_MS;
 
-  db[userId]._limit = entry; // salva dentro do objeto do usuário
+  db[userId]._limit = entry;
   saveAll(db);
 
   return {
@@ -60,10 +54,9 @@ function checkLimit(userId, consume = false) {
   };
 }
 
-/* ---------- comando !limite ---------- */
 async function sendLimitStatus(sock, msg) {
   const userId = msg.key.remoteJid;
-  const res    = checkLimit(userId, false);
+  const res = checkLimit(userId, false);
 
   let text;
   if (res.cooldown_until && Date.now() < res.cooldown_until) {

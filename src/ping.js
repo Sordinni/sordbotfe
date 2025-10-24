@@ -20,7 +20,6 @@ async function handlePing(sock, msg) {
   const jid = msg.key.remoteJid;
   const t0  = Date.now();
 
-  /* coleta tudo de uma vez */
   const [
     arch, plat, type, version, machine, uptime
   ] = [
@@ -32,7 +31,6 @@ async function handlePing(sock, msg) {
   const free  = os.freemem();
   const used  = total - free;
 
-  /* tempo do bot em hh:mm */
   const ms   = Date.now() - startTime.getTime();
   const hrs  = Math.floor(ms / 3_600_000);
   const mins = Math.floor((ms % 3_600_000) / 60_000);

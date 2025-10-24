@@ -1,22 +1,20 @@
-/* renameStickerMeta.js – com debug completo */
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { getUserMeta, setUserMeta, resetUserMeta } = require('./utils');
 
 const ALIASES = ['renomear', 'r', 'ren'];
 
 async function handleRenameSticker(sock, msg) {
-  const jid   = msg.key.remoteJid;
-  const body  = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
-  const cmd   = body.split(/\s+/)[0].toLowerCase();
+  const jid = msg.key.remoteJid;
+  const body = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
+  const cmd = body.split(/\s+/)[0].toLowerCase();
 
   if (!ALIASES.includes(cmd)) return false;
 
-  const args   = body.slice(cmd.length).trim();
-const userId = msg.key.participant || msg.key.remoteJid;
+  const args = body.slice(cmd.length).trim();
+  const userId = msg.key.participant || msg.key.remoteJid;
 
   console.log(`[renameStickerMeta] userId=${userId}  cmd=${cmd}  args="${args}"`);
 
-  /* ---------- resetar ---------- */
   if (args === 'resetar') {
     console.log(`[renameStickerMeta] resetando metadados para ${userId}`);
     resetUserMeta(userId);
@@ -24,7 +22,6 @@ const userId = msg.key.participant || msg.key.remoteJid;
     return true;
   }
 
-  /* ---------- regex: "pack" "author" ---------- */
   const match = args.match(/^["“](.+?)["”]\s+["“](.+?)["”]$/);
   if (!match) {
     const texto =
@@ -40,7 +37,6 @@ const userId = msg.key.participant || msg.key.remoteJid;
   const [, pack, author] = match;
   console.log(`[renameStickerMeta] pack="${pack}"  author="${author}"`);
 
-  /* ---------- renomear figurinha respondida ---------- */
   const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
   if (quoted?.stickerMessage) {
     try {
@@ -59,11 +55,9 @@ const userId = msg.key.participant || msg.key.remoteJid;
     return true;
   }
 
-  /* ---------- apenas salva metadados ---------- */
   console.log(`[renameStickerMeta] salvando metadados para ${userId}`);
   setUserMeta(userId, { pack, author });
 
-  /* confirmação visual no WhatsApp */
   await sock.sendMessage(
     jid,
     { text: `📦 *Suas figurinhas ficarão assim:* ${pack} • ${author}` },

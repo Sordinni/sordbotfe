@@ -6,7 +6,6 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-// ---------- Funções auxiliares ----------
 function createTempFilePath(url) {
   if (!url || typeof url !== 'string') url = 'https://example.com/fallback.tmp';
   const tempDir = path.join(__dirname, 'temp');
@@ -114,7 +113,6 @@ async function processYouTubeMedia(url, quality = '720p') {
   }
 }
 
-// ---------- Envio de mídia ----------
 async function downloadAndSendMedia(sock, message, media, fullMsg = message) {
   const url = typeof media.url === 'string' ? media.url : media.url?.url;
   if (!url || typeof url !== 'string') throw new Error('URL inválida para download.');
@@ -154,7 +152,6 @@ async function downloadAndSendMedia(sock, message, media, fullMsg = message) {
   return filePath;
 }
 
-// ---------- Handler principal ----------
 async function handleSocialMediaDownload(sock, message) {
   if (!message?.key?.remoteJid || !message?.message) return false;
 
