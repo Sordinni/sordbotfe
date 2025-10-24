@@ -88,23 +88,25 @@ function resetUserMeta(userId) {
   }
 }
 
+
 async function isUserInAvisosGroup(sock, userLid) {
   const traceId = `[LIDCHK-${Date.now().toString(36).toUpperCase()}]`;
   console.log(`${traceId} 🔍 Verificando grupo de avisos para ${userLid}`);
 
-  /* EXTRAÇÃO DE METADADOS PARA DEBUG */
-  const phoneNumber = userLid.replace(/@.+/, '');
-  console.log(`${traceId} 📞 phoneNumber: ${phoneNumber}`);
-  console.log(`${traceId} 🆔 userLid: ${userLid}`);
-  console.log(`${traceId} 🏷️  AVISOS_GROUP_ID: ${AVISOS_GROUP_ID}`);
+  /* ----------  LOG DEBUG  ---------- */
+  const contact = sock.contacts?.[userLid] || {};
+  console.log(`${traceId} 📋 DEBUG`, {
+    userLid,
+    phoneNumber: contact.phoneNumber || null,
+    name: contact.name || null,
+    notify: contact.notify || null,
+  });
+  /* --------------------------------- */
 
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
     const participantsIds = meta.participants.map(p => p.id);
     const isPresent = participantsIds.includes(userLid);
-
-    console.log(`${traceId} ✅ isPresent: ${isPresent}`);
-
     if (isPresent) return true;
 
     console.log(`${traceId} ❌ Usuário NÃO está no grupo de avisos. Será bloqueado.`);
@@ -117,6 +119,7 @@ async function isUserInAvisosGroup(sock, userLid) {
     return true;
   }
 }
+
 async function notifyAdminsBlock(sock, userLid) {
   const text = `⚠️ *Usuário bloqueado:* ${userLid}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
   await sleep(r(1000, 3000));
@@ -146,10 +149,15 @@ async function handleAdminResponse(sock, msg) {
 
   if (response === 'autorizar') {
     await sock.updateBlockStatus(userLid, 'unblock');
-      const destUser = msg.key.remoteJid;
-    await sock.sendMessage(user, {
+
+    /* ----------  CONVERTE LID → @s.whatsapp.net  ---------- */
+    const contact = sock.contacts?.[userLid] || {};
+    const userJid = contact.phoneNumber || userLid.replace('@lid', '@s.whatsapp.net');
+
+    await sock.sendMessage(userJid, {
       text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos. https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q`,
     });
+
     await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userLid} foi desbloqueado.` });
   } else if (response === 'negar') {
     await sock.sendMessage(ADMIN_GROUP_ID, { text: `🚫 ${userLid} continua bloqueado.` });
