@@ -1,4 +1,3 @@
-/*  utils.js  –  So𝘳dBOT Rouge  */
 const fs   = require('fs-extra');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
@@ -11,7 +10,8 @@ const AVISOS_GROUP_ID = '120363046428170312@g.us';
 const DB_FILE         = path.join(__dirname, '..', 'db', 'users.json');
 fs.ensureFileSync(DB_FILE);
 
-/* ----------  DB helpers  ---------- */
+const normalizeJid = (jid) => jid?.replace(/@.+/, '') + '@s.whatsapp.net';
+
 function loadAll() {
   try { return fs.readJsonSync(DB_FILE) || {}; }
   catch { return {}; }
@@ -20,8 +20,9 @@ function saveAll(data) { fs.writeJsonSync(DB_FILE, data, { spaces: 2 }); }
 
 function ensureUser(db, userId) {
   if (!userId) return;
-  if (!db[userId]) {
-    db[userId] = {
+  const njid = normalizeJid(userId);
+  if (!db[njid]) {
+    db[njid] = {
       firstSeen: Date.now(),
       stickers: { static: 0, animated: 0 },
       name: 'Desconhecido'
@@ -29,85 +30,89 @@ function ensureUser(db, userId) {
   }
 }
 
-/* ----------  Sticker stats  ---------- */
 function incSticker(jid, pushName, type /* 'static' | 'animated' */) {
   const db = loadAll();
-  ensureUser(db, jid);
-  db[jid].stickers[type] = (db[jid].stickers[type] || 0) + 1;
-  if (pushName) db[jid].name = pushName;
+  const njid = normalizeJid(jid);
+  ensureUser(db, njid);
+  db[njid].stickers[type] = (db[njid].stickers[type] || 0) + 1;
+  if (pushName) db[njid].name = pushName;
   saveAll(db);
 }
 
 function getStats(jid) {
   const db = loadAll();
-  if (!db[jid]) {
+  const njid = normalizeJid(jid);
+  if (!db[njid]) {
     return {
       firstSeen: Date.now(),
       stickers: { static: 0, animated: 0 },
       name: 'Desconhecido'
     };
   }
-  return db[jid];
+  return db[njid];
 }
 
-/* ----------  Stretch toggle  ---------- */
 function toggleStretch(userId) {
   if (!userId) return true;
   const db = loadAll();
-  ensureUser(db, userId);
-  db[userId].useStretch = !(db[userId].useStretch ?? true);
+  const njid = normalizeJid(userId);
+  ensureUser(db, njid);
+  db[njid].useStretch = !(db[njid].useStretch ?? true);
   saveAll(db);
-  return db[userId].useStretch;
+  return db[njid].useStretch;
 }
 
 function getUseStretch(userId) {
   if (!userId) return true;
   const db = loadAll();
-  return db[userId]?.useStretch ?? true;
+  const njid = normalizeJid(userId);
+  return db[njid]?.useStretch ?? true;
 }
 
-/* ----------  Pack/Author metadata  ---------- */
 function getUserMeta(userId) {
   if (!userId) return null;
   const db = loadAll();
-  if (!db[userId] || (!db[userId].pack && !db[userId].author)) return null;
-  return { pack: db[userId].pack, author: db[userId].author };
+  const njid = normalizeJid(userId);
+  if (!db[njid] || (!db[njid].pack && !db[njid].author)) return null;
+  return { pack: db[njid].pack, author: db[njid].author };
 }
 
 function setUserMeta(userId, { pack, author }) {
   if (!userId) return;
   const db = loadAll();
-  ensureUser(db, userId);
-  db[userId].pack   = pack;
-  db[userId].author = author;
+  const njid = normalizeJid(userId);
+  ensureUser(db, njid);
+  db[njid].pack   = pack;
+  db[njid].author = author;
   saveAll(db);
 }
 
 function resetUserMeta(userId) {
   if (!userId) return;
   const db = loadAll();
-  if (db[userId]) {
-    delete db[userId].pack;
-    delete db[userId].author;
+  const njid = normalizeJid(userId);
+  if (db[njid]) {
+    delete db[njid].pack;
+    delete db[njid].author;
     saveAll(db);
   }
 }
 
-/* ----------  Avisos group blocker  ---------- */
 async function isUserInAvisosGroup(sock, userLid) {
   const traceId = `[LIDCHK-${Date.now().toString(36).toUpperCase()}]`;
-  console.log(`${traceId} 🔍 Verificando grupo de avisos para ${userLid}`);
+  const njid = normalizeJid(userLid);
+  console.log(`${traceId} 🔍 Verificando grupo de avisos para ${njid}`);
 
   try {
     const meta = await sock.groupMetadata(AVISOS_GROUP_ID);
-    const participantsIds = meta.participants.map(p => p.id);
-    const isPresent = participantsIds.includes(userLid);
+    const participantsIds = meta.participants.map(p => normalizeJid(p.id));
+    const isPresent = participantsIds.includes(njid);
     if (isPresent) return true;
 
     console.log(`${traceId} ❌ Usuário NÃO está no grupo de avisos. Será bloqueado.`);
     await sleep(r(1000, 3000));
-    await sock.updateBlockStatus(userLid, 'block');
-    await notifyAdminsBlock(sock, userLid);
+    await sock.updateBlockStatus(njid, 'block');
+    await notifyAdminsBlock(sock, njid);
     return false;
   } catch (e) {
     console.error(`${traceId} ⚠️ Erro ao verificar grupo: ${e.message}`);
@@ -116,7 +121,8 @@ async function isUserInAvisosGroup(sock, userLid) {
 }
 
 async function notifyAdminsBlock(sock, userLid) {
-  const text = `⚠️ *Usuário bloqueado:* ${userLid}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
+  const njid = normalizeJid(userLid);
+  const text = `⚠️ *Usuário bloqueado:* ${njid}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
   await sleep(r(1000, 3000));
   await sock.sendMessage(ADMIN_GROUP_ID, { text });
 }
@@ -136,7 +142,7 @@ async function handleAdminResponse(sock, msg) {
 
   if (!isBlockNotification) return;
 
-  const match = quotedText.match(/([0-9A-Za-z]+@lid)/);
+  const match = quotedText.match(/([0-9A-Za-z]+@s\.whatsapp\.net)/);
   const userLid = match ? match[1] : null;
   if (!userLid) return;
 
@@ -153,20 +159,28 @@ async function handleAdminResponse(sock, msg) {
   }
 }
 
-/* ----------  Misc  ---------- */
 async function sendHelp(sock, jid, quote) {
   const text = `🔴 *So𝘳dBOT Rouge* · Central de Ajuda
 
-📸 Envie uma imagem → sticker
-🎞️ Envie vídeo/GIF → sticker animado
-🎨 Envie link do emoji.gg → sticker
-⬇️ Links de Twitter, TikTok, Insta → vídeo
-⚙️ \`alternar\` → esticar ou não sticker
-📦 \`stats\` → suas estatísticas
-🪄 \`renomear "nome" "autor"\` → editar sticker
-📡 \`ping\` → testar conexão
-📘 \`info\` → informações gerais`;
-  await sleep(r(1000, 3000));
+*🧩 Como fazer figurinhas*
+• 📷 Envie uma imagem → vira sticker.
+• 🎥 Envie vídeo/GIF → sticker animado.
+• 🎨 Envie um código do emoji.gg ou stickers.gg → gera sticker.
+
+*⬇️ Para baixar vídeos*
+• Envie link de Twitter, Instagram, TikTok ou Pinterest.
+
+*📋 Outros comandos*
+• \`ajuda\` → esta mensagem.
+• \`alternar\` → liga/desliga figurinha esticada.
+• \`fig\` → responda mídia com fig para virar sticker.
+• \`renomear "nome" "autor"\` → renomeia os stickers.
+• \`ping\` → verifica se estou online.
+• \`stats\` → mostra suas estatísticas.
+• \`info\` → informações do So𝘳dBOT.
+
+📫 Ajuda ou sugestão? Envie \`info\``;
+await sleep(r(1000, 3000));
   await sock.sendMessage(jid, { text }, quote);
 }
 
@@ -176,7 +190,6 @@ function logAction(action, user, start = Date.now()) {
   console.log(`\x1b[36m[${ts}]\x1b[0m ${action} – ${user || 'Desconhecido'} (${elapsed}ms)`);
 }
 
-/* ----------  Exports  ---------- */
 module.exports = {
   incSticker,
   getStats,
