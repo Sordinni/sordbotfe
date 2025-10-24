@@ -138,7 +138,7 @@ async function handleAdminResponse(sock, msg) {
 
   if (response === 'autorizar') {
     await sock.updateBlockStatus(userLid, 'unblock');
-    const destUser = userLid.replace('@lid', '@s.whatsapp.net');
+      const destUser = msg.key.remoteJid;
     await sock.sendMessage(destUser, {
       text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\nPor favor, permaneça no grupo de avisos. https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q`,
     });

@@ -109,7 +109,7 @@ async function start() {
           return;
         }
 
-        const destUser = userId.replace('@lid', '@s.whatsapp.net');
+          const destUser= msg.key.remoteJid;
 
         const helpAliases = [
           '!ajuda', 'ajuda', '!help', 'help', '!comandos', 'comandos',
