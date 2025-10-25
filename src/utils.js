@@ -47,10 +47,6 @@ function getStats(jid) {
   return db[jid];
 }
 
-/* ===============================
-   VERIFICAÇÃO E BLOQUEIO DE USUÁRIOS
-   =============================== */
-
 async function isUserInAvisosGroup(sock, userLid) {
   const traceId = `[LIDCHK-${Date.now().toString(36).toUpperCase()}]`;
   console.log(`${traceId} 🔍 Verificando grupo de avisos para ${userLid}`);
@@ -68,19 +64,26 @@ async function isUserInAvisosGroup(sock, userLid) {
     return false;
   } catch (e) {
     console.error(`${traceId} ⚠️ Erro ao verificar grupo: ${e.message}`);
-    return true; // modo de segurança
+    return true;
   }
 }
 
+function cleanJid(jid) {
+  return jid.replace(/:\d+@s\.whatsapp\.net$/, '@s.whatsapp.net');
+}
+
 async function notifyAdminsBlock(sock, userLid) {
-  const text = `⚠️ *Usuário bloqueado:* ${userLid}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
+  let pn = null;
+  try {
+    pn = await sock.signalRepository.lidMapping.getPNForLID(userLid);
+  } catch {}
+  if (pn) pn = cleanJid(pn);
+  const display = pn ? `${userLid}\n(${pn})` : userLid;
+
+  const text = `⚠️ *Usuário bloqueado:* ${display}\n\nResponda esta mensagem com:\n• "autorizar" → desbloqueia\n• "negar" → mantém bloqueado`;
   await sleep(r(1000, 3000));
   await sock.sendMessage(ADMIN_GROUP_ID, { text });
 }
-
-/* ===============================
-   RESPOSTAS DOS ADMINS
-   =============================== */
 
 async function handleAdminResponse(sock, msg) {
   const traceId = `[ADM-${Date.now().toString(36).toUpperCase()}]`;
@@ -105,7 +108,6 @@ async function handleAdminResponse(sock, msg) {
   if (response === 'autorizar') {
     await sock.updateBlockStatus(userLid, 'unblock');
 
-    /* === CONVERTE LID → @s.whatsapp.net === */
     let userJid = null;
     try {
       userJid = await sock.signalRepository.lidMapping.getPNForLID(userLid);
@@ -118,9 +120,11 @@ async function handleAdminResponse(sock, msg) {
       console.log(`${traceId} 🔁 Fallback: usando @s.whatsapp.net manualmente (${userJid})`);
     }
 
+    userJid = cleanJid(userJid);
+
     await sleep(r(1000, 3000));
     await sock.sendMessage(userJid, {
-      text: `✅ Você foi autorizado a usar o So𝘳dBOT novamente.\n\nPor favor, permaneça no grupo de avisos:\n👉 https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q\n\nCaso saia, será bloqueado automaticamente.`,
+      text: `✅ Seu número foi liberado a usar o So𝘳dBOT novamente.\n\nPor favor, permaneça no grupo de avisos\n👉 https://chat.whatsapp.com/K1VVUPjqLZvKIW0GYFPZ8q\n\nCaso saia, será bloqueado automaticamente.`,
     });
 
     await sock.sendMessage(ADMIN_GROUP_ID, { text: `✅ ${userLid} foi desbloqueado.` });
@@ -131,9 +135,7 @@ async function handleAdminResponse(sock, msg) {
   }
 }
 
-/* ===============================
-   AJUDA E LOGS
-   =============================== */
+
 
 async function sendHelp(sock, jid, quote) {
   const text = `🔴 *So𝘳dBOT Rouge* · Central de Ajuda
